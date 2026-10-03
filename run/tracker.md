@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
-BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min), S8 ~10 min, S9 ~7 min.
-IN FLIGHT: S9b deep review round 2.
+BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min), S8 ~10 min, S9 ~7 min, S9b ~15 min.
+IN FLIGHT: S10 deep review round 1.
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -119,11 +119,21 @@ STEP S9: PASS
   disagreements: file ids without .json (step text over barra); folder separators rejected not sanitised; move/rename refuse to overwrite
   decisions:     plan §9 S9 lines (parse_file, 404/400 split, BEGIN IMMEDIATE transactions, pinned versions)
 
-STEP S9b: FAILED ROUND 1 -> fix round 2 done; deep review round 2 (whole staged diff) — inserted 2026-10-03 from S9 review IMPORTANT 1
+STEP S9b: PASS (round 2)
+  commit:  e80947a — inserted 2026-10-03 from S9 review IMPORTANT 1
   reviews: code-reviewer-deep r1 FAIL, critical 1 (BEGIN outside try; KeyboardInterrupt wedge reproduced) (~3 min); report run/reports/S9b-review-1.md
+           code-reviewer-deep r2 PASS, advisory 3 (~5 min); report run/reports/S9b-review-2.md
   reports: run/reports/S9b-implementer-1.md, S9b-implementer-2.md (fix: BEGIN inside try, ROLLBACK failure closes conn; pytest 46)
   gate:    tsc -b 0; vitest 0 (19 / 178); pytest 44 passed; ruff clean
   stage:   server/views_store.py, server/tests/test_views_store.py, plan (S9b block + §9), tracker, S9 review report, S9b implementer report
   files:   as declared
   disagreements: none
   decisions:     plan §9 S9b lines (busy timeout set in test via PRAGMA, no WAL, idempotent close)
+
+STEP S10: IN FLIGHT (deep review round 1)
+  reports: run/reports/S10-implementer-1.md
+  gate:    tsc -b 0; vitest 0 (19 / 178); pytest 74 passed; ruff clean; uvicorn smoke GET /views 200
+  stage:   server/views_api.py, server/tests/test_views_api.py, plan (§9), tracker, S9b review-2 report, S10 implementer report
+  files:   as declared
+  disagreements: barra lacks 404 on folder rename/delete and overwrites on move/rename; store behaviour kept (404s, refuse overwrite -> 400)
+  decisions:     plan §9 S10 lines (create_app factory, .json accepted+stripped, 503 on lock timeout, section-prefixed folders)

@@ -931,6 +931,17 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   rather than adding a constructor parameter ("Nothing else changes"); WAL not enabled (optional in the review,
   changes the on-disk mode). `close()` is idempotent (sqlite3 close twice is a no-op); use after close raises
   `sqlite3.ProgrammingError`.
+- S10: app factory `create_app(db_path=None)` plus module-level `app = create_app()` for uvicorn; the store opens in
+  the lifespan (import touches no disk) and closes on shutdown. DB: argument, else env `VIEWS_DB`, else
+  `<repo>/data/views.db` (data/ is gitignored).
+- S10: an incoming file id with a `.json` suffix is accepted and stripped (barra's ids had one; a slug cannot end in
+  `.json`). Responses never carry it. Delete echoes the id as the client sent it, as barra did.
+- S10: `folder`, `parent`, `to_folder`, `rel` carry the section prefix as in barra; `""` is 400 (barra required a section).
+  A trailing or doubled slash is 400. Move across sections is 400.
+- S10: status codes: FileNotFoundError 404, ValueError 400, `sqlite3.OperationalError` (lock timeout) 503. Barra
+  mapped no 404 for folder rename/delete (missing folder was a no-op or 400); here a missing folder is 404, and
+  delete/rename of a section root is 400. Move/rename onto an existing view is 400 (S9 refuses; barra overwrote).
+- S10: handlers are sync `def` (threadpool); the store's RLock serialises them.
 
 ## 10. As built
 

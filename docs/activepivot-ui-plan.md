@@ -1,6 +1,6 @@
 # Plan — flexagg2++: a React/Vite pivot explorer on native ActivePivot
 
-Status: READY at cap, revision 4 (2026-10-03). Branch `activepivot-explorer`.
+Status: BUILT 2026-10-03 (revision 4 + dated amendments in §9); S12 awaits the owner's read. Branch `activepivot-explorer`.
 Built from barra_poc's Vite UI (barra_poc `frontend/` at sha 442d2bc), not the Streamlit app.
 
 ## 1. What this delivers, and what it does not
@@ -998,4 +998,42 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
 
 ## 10. As built
 
-(Written from the tracker at the end.)
+Run 2026-10-03, unattended (D5), from `run/tracker.md`. 16 commits: the 12 planned steps plus 4 inserted
+(S4b, S4c, S9b, S10b), each with its own block above. Reports per round are in `run/reports/`.
+
+| Step | Commit | Review | Note |
+|---|---|---|---|
+| S1 | 2cee46d | r1 PASS | seed, 11 files / 42 tests |
+| S2 | 08e453e | r1 PASS | `/ap` proxy key is the regex `^/ap/` (bare `/ap` matches `/api`) |
+| S3 | 69bd722 | r1 PASS | file set amended: `RawDiscovery` widened in `client.ts` |
+| S4 | 9e3074a | deep r1 PASS, 4 important → S4b | |
+| S4b | 13944a8 | deep r1 PASS | `ApQuery.depth`; deepest level by real depth |
+| S4c | ee83e99 | deep r1 PASS | members were written `[d].[h].[level].[ALL]…` (400 live); found by S7 |
+| S5 | 9573cdb | r1 PASS | one record per row × col-level combination, all measures |
+| S6 | 508a02b | r1 PASS | |
+| S7 | 393f342 | r1 PASS | pre-review fix for S4c's member form |
+| S8 | 1e20da2 | r1 PASS | file set amended (+ `Pivot.test.tsx` chip text) |
+| S9 | c396cbf | deep r1 PASS, 1 important → S9b | |
+| S9b | e80947a | deep r1 FAIL, r2 PASS | BEGIN and COMMIT inside the `try`; failed ROLLBACK closes the connection |
+| S10 | 8f03ba3 | deep r1 PASS, 1 important → S10b | |
+| S10b | 8ecdca5 | r1 FAIL, r2 PASS | NaN refused in state; 422 never echoes non-finite input |
+| S11 | cc46bbd | r1 PASS | file set amended (+ `client.ts`, route-test fixtures to v2) |
+| S12 | d115774 | none (docs) | AWAITING READER: the owner reads README.md and docs/serving.md |
+
+**Definition of done (§7), run by the orchestrator after S12:** `npm ci` 0; `npx tsc -b` 0; `npx vitest run` 0
+(21 files, 188 tests); pytest 0 (91 passed); `npx vite build` 0; the `"/pivot"` grep prints nothing; one commit per
+step in `git log`. Item 8, live smoke in headless Chromium against :9095/:8010/:8020: load, context pick, Factor ×
+Net exposure, expand (3 → 14 rows), save, reload, load — all pass, 0 console errors, 0 failed requests. One
+deviation: expanding needs a second row level (`rows.length > 1`), so FactorGroup › Factor were both on rows.
+
+**What the run taught the plan.** The member-path form was written correctly in S4's text and wrong in S4's code
+and tests, and two reviews passed it because both live-probed only slicing members. A live probe of every member
+form, not one, would have caught it at S4. Four of the five review findings that became steps were in the server
+(transactions, NaN) — the deep tier earned its cost on S9/S10.
+
+**Open for the owner** (from §9, none blocking):
+- With a binding missing, the page names it and runs nothing; the plan had said "the pivot still works".
+- Position and Issuer filter pickers list ~5,000 members unpaged, with no member search.
+- Guard warnings now appear after a query runs, not live while editing the zones (S8 deleted the amber lines).
+- Saved views and chart specs from barra (short names) do not load; there is no importer (§1).
+- :9095 answers anonymously as admin on all interfaces (barra_poc setting).

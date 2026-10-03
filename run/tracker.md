@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
 BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min), S8 ~10 min, S9 ~7 min, S9b ~15 min, S10 ~6 min, S10b ~12 min, S11 ~15 min, S12 ~10 min.
-IN FLIGHT: §7 definition of done — live browser smoke (item 8).
+IN FLIGHT: nothing. Run complete; S12 awaits the owner's read (D6).
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -161,9 +161,15 @@ STEP S11: PASS
   decisions:     plan §9 S11 lines (client.ts base param, ^/views-api/ regex proxy, fitToModel drop line, v1/absent refused whole)
 
 STEP S12: AWAITING READER (mechanical half landed; owner read at the end, per D6)
+  commit:  d115774
   reports: run/reports/S12-implementer-1.md
   gate:    every README command run (or verified by reading where it would disturb the running barra_poc process): all 0 / 200
   stage:   README.md, docs/serving.md, tracker, S11 review report, S12 implementer report
   files:   as declared
   disagreements: barra_poc starts ActivePivot and risk_api with one command (three terminals, not three services); RISK_API_URL also documented
   review:  none (docs-only commits are not gated, per S12 REVIEW)
+
+DONE (§7), 2026-10-03: npm ci 0; tsc -b 0; vitest 0 (21 / 188); pytest 0 (91); vite build 0; "/pivot" grep empty;
+  one commit per step. Live smoke (headless Chromium, scratch views DB): load, context pick, Factor x Net exposure,
+  expand 3 -> 14 rows, save 200, reload, load view, rows/measure restored — PASS; 0 console errors; 0 failed requests.
+  Deviation: expand needs two row levels (FactorGroup + Factor).

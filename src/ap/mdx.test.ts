@@ -35,7 +35,7 @@ describe("path helpers", () => {
 describe("memberKey", () => {
   it("writes the full path below AllMember", () => {
     expect(memberKey(SECTOR, pathKey(["UK", "Energy"]), [])).toBe(
-      "[Securities].[Security].[Sector].[ALL].[AllMember].[UK].[Energy]",
+      "[Securities].[Security].[ALL].[AllMember].[UK].[Energy]",
     );
   });
   it("writes the short form for a slicing level", () => {
@@ -47,7 +47,12 @@ describe("memberKey normalisation", () => {
   it("(s) the level key is normalised before the slicing check and the write", () => {
     const k = "[D]]].[H].[L]]x]";
     expect(memberKey(k, "m", [k])).toBe("[D]]].[H].[L]]x].[m]");
-    expect(memberKey(k, "m", [])).toBe("[D]]].[H].[L]]x].[ALL].[AllMember].[m]");
+    expect(memberKey(k, "m", [])).toBe("[D]]].[H].[ALL].[AllMember].[m]");
+  });
+  it("(s3) the level name never sits before [ALL]: the level form is a 400 live", () => {
+    const mk = memberKey(COUNTRY, "UK", []);
+    expect(mk).toBe("[Securities].[Security].[ALL].[AllMember].[UK]");
+    expect(mk).not.toContain("[Country]");
   });
   it("(s2) a malformed level key throws from memberKey itself", () => {
     expect(() => memberKey("[a].[b]", "m", [])).toThrow(/^bad level key: \[a\]\.\[b\]$/);
@@ -77,24 +82,24 @@ describe("buildMdx", () => {
   });
   it("(d) single-member filter off-axis goes to WHERE", () => {
     expect(buildMdx(q({ rows: [MGR], filters: { [COUNTRY]: [pathKey(["UK"])] } }))).toBe(
-      `SELECT ${M2} ON COLUMNS, [Positions].[Manager].[Manager].Members ON ROWS FROM [Exposures] WHERE ([Securities].[Security].[Country].[ALL].[AllMember].[UK])`,
+      `SELECT ${M2} ON COLUMNS, [Positions].[Manager].[Manager].Members ON ROWS FROM [Exposures] WHERE ([Securities].[Security].[ALL].[AllMember].[UK])`,
     );
   });
   it("(e) two-member filter becomes a sub-select", () => {
     expect(buildMdx(q({ rows: [MGR], filters: { [COUNTRY]: ["UK", "FR"] } }))).toBe(
-      `SELECT ${M2} ON COLUMNS, [Positions].[Manager].[Manager].Members ON ROWS FROM (SELECT {[Securities].[Security].[Country].[ALL].[AllMember].[UK], [Securities].[Security].[Country].[ALL].[AllMember].[FR]} ON COLUMNS FROM [Exposures])`,
+      `SELECT ${M2} ON COLUMNS, [Positions].[Manager].[Manager].Members ON ROWS FROM (SELECT {[Securities].[Security].[ALL].[AllMember].[UK], [Securities].[Security].[ALL].[AllMember].[FR]} ON COLUMNS FROM [Exposures])`,
     );
   });
   it("two filtered hierarchies nest once each", () => {
     expect(
       buildMdx(q({ rows: [MGR], filters: { [COUNTRY]: ["UK", "FR"], [DATE]: ["d1", "d2"] } })),
     ).toBe(
-      `SELECT ${M2} ON COLUMNS, [Positions].[Manager].[Manager].Members ON ROWS FROM (SELECT {[Exposures].[Date].[Date].[ALL].[AllMember].[d1], [Exposures].[Date].[Date].[ALL].[AllMember].[d2]} ON COLUMNS FROM (SELECT {[Securities].[Security].[Country].[ALL].[AllMember].[UK], [Securities].[Security].[Country].[ALL].[AllMember].[FR]} ON COLUMNS FROM [Exposures]))`,
+      `SELECT ${M2} ON COLUMNS, [Positions].[Manager].[Manager].Members ON ROWS FROM (SELECT {[Exposures].[Date].[ALL].[AllMember].[d1], [Exposures].[Date].[ALL].[AllMember].[d2]} ON COLUMNS FROM (SELECT {[Securities].[Security].[ALL].[AllMember].[UK], [Securities].[Security].[ALL].[AllMember].[FR]} ON COLUMNS FROM [Exposures]))`,
     );
   });
   it("(f) a member named a]b is escaped", () => {
     expect(buildMdx(q({ filters: { [COUNTRY]: ["a]b"] } }))).toBe(
-      `SELECT ${M2} ON COLUMNS FROM [Exposures] WHERE ([Securities].[Security].[Country].[ALL].[AllMember].[a]]b])`,
+      `SELECT ${M2} ON COLUMNS FROM [Exposures] WHERE ([Securities].[Security].[ALL].[AllMember].[a]]b])`,
     );
   });
   it("escapes measure, cube and level names", () => {
@@ -110,7 +115,7 @@ describe("buildMdx", () => {
   });
   it("(i) a Sector member carries its Country path", () => {
     expect(buildMdx(q({ filters: { [SECTOR]: [pathKey(["UK", "Energy"])] } }))).toBe(
-      `SELECT ${M2} ON COLUMNS FROM [Exposures] WHERE ([Securities].[Security].[Sector].[ALL].[AllMember].[UK].[Energy])`,
+      `SELECT ${M2} ON COLUMNS FROM [Exposures] WHERE ([Securities].[Security].[ALL].[AllMember].[UK].[Energy])`,
     );
   });
   it("(j) rows Country+Sector put only the Sector level on the axis", () => {
@@ -120,12 +125,12 @@ describe("buildMdx", () => {
   });
   it("(j2) drill: Country filter with Sector on rows is a sub-select", () => {
     expect(buildMdx(q({ rows: [COUNTRY, SECTOR], filters: { [COUNTRY]: ["UK"] } }))).toBe(
-      `SELECT ${M2} ON COLUMNS, [Securities].[Security].[Sector].Members ON ROWS FROM (SELECT {[Securities].[Security].[Country].[ALL].[AllMember].[UK]} ON COLUMNS FROM [Exposures])`,
+      `SELECT ${M2} ON COLUMNS, [Securities].[Security].[Sector].Members ON ROWS FROM (SELECT {[Securities].[Security].[ALL].[AllMember].[UK]} ON COLUMNS FROM [Exposures])`,
     );
   });
   it("(k) a Date filter with Date on rows is a sub-select, not WHERE", () => {
     expect(buildMdx(q({ rows: [DATE], filters: { [DATE]: ["d1"] } }))).toBe(
-      `SELECT ${M2} ON COLUMNS, [Exposures].[Date].[Date].Members ON ROWS FROM (SELECT {[Exposures].[Date].[Date].[ALL].[AllMember].[d1]} ON COLUMNS FROM [Exposures])`,
+      `SELECT ${M2} ON COLUMNS, [Exposures].[Date].[Date].Members ON ROWS FROM (SELECT {[Exposures].[Date].[ALL].[AllMember].[d1]} ON COLUMNS FROM [Exposures])`,
     );
   });
   it("(l) a Units $ filter is written in the short slicing form", () => {
@@ -135,7 +140,7 @@ describe("buildMdx", () => {
   });
   it("two single-member WHERE filters form one tuple", () => {
     expect(buildMdx(q({ filters: { [UNITS]: ["Base"], [DATE]: ["d1"] } }))).toBe(
-      `SELECT ${M2} ON COLUMNS FROM [Exposures] WHERE ([Units].[Units].[Units].[Base], [Exposures].[Date].[Date].[ALL].[AllMember].[d1])`,
+      `SELECT ${M2} ON COLUMNS FROM [Exposures] WHERE ([Units].[Units].[Units].[Base], [Exposures].[Date].[ALL].[AllMember].[d1])`,
     );
   });
   it("two filters on levels of one hierarchy are an explicit error", () => {
@@ -171,7 +176,7 @@ describe("buildMdx", () => {
   });
   it("(p) members holding [, ' and a newline come out exact", () => {
     expect(buildMdx(q({ filters: { [COUNTRY]: ["a[b'c\nd"] } }))).toBe(
-      `SELECT ${M2} ON COLUMNS FROM [Exposures] WHERE ([Securities].[Security].[Country].[ALL].[AllMember].[a[b'c\nd])`,
+      `SELECT ${M2} ON COLUMNS FROM [Exposures] WHERE ([Securities].[Security].[ALL].[AllMember].[a[b'c\nd])`,
     );
   });
   it("(q) one hierarchy on rows and cols throws", () => {

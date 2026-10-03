@@ -28,13 +28,14 @@ export function memberKey(lvlKey: string, path: string, slicing: string[]): stri
     if (parts.length !== 1) throw new Error(`slicing member must be one name: ${lk}`);
     return `${lk}.[${esc(parts[0])}]`;
   }
-  return `${lk}.[ALL].[AllMember]${parts.map((p) => `.[${esc(p)}]`).join("")}`;
+  // Hierarchy form: the level name before [ALL] is a 400 live.
+  return `${hierKey(lk)}.[ALL].[AllMember]${parts.map((p) => `.[${esc(p)}]`).join("")}`;
 }
 
-const hierKey = (lvlKey: string): string => {
+function hierKey(lvlKey: string): string {
   const r = parseLevelKey(lvlKey);
   return `[${esc(r.dim)}].[${esc(r.hier)}]`;
-};
+}
 
 // One set per hierarchy: the level with the greatest depth wins, whatever the order given; hierarchies keep
 // first-seen order.

@@ -359,6 +359,36 @@ FAIL if: a shallower level can win; an S4 expected string changed; `esc` defined
 ROLLBACK: one `git revert` of this step.
 BUDGET: 15 min; 1 round (deep tier: it touches the escaping).
 
+**S4c. Non-slicing members are written under the hierarchy, as the plan said.** (Inserted 2026-10-03 from S7's
+report; §18.6. UNREVIEWED block: a disagreement with it is a DISAGREEMENTS entry.)
+EXTEND `src/ap/mdx.ts`, `src/ap/mdx.test.ts`.
+
+WHY NOW: S4 wrote `memberKey` as `[d].[h].[level].[ALL].[AllMember].[p1]…` — the level name before `[ALL]` —
+where S4's own WHAT TO BUILD says `[d].[h].[ALL].[AllMember].[p1]…`. ActivePivot answers 400 to the level form
+on every filter (orchestrator re-checked: a Date WHERE is 400 in the level form, 200 in the hierarchy form). S4's
+tests pinned the wrong form and its live checks only exercised the slicing form. Every context filter in S7 is
+a member, so nothing filtered runs until this lands.
+
+WHAT TO BUILD:
+- `memberKey(levelKey, path, slicing)` writes `[d].[h].[ALL].[AllMember].[p1]…[pn]` for a non-slicing level
+  (dimension and hierarchy from the level key, each through `esc`). The slicing form is unchanged.
+- Update every expected string in `mdx.test.ts` that contains a non-slicing member to the hierarchy form. No other
+  expected string changes. Add one test whose name says why (the level form is a 400 live).
+IMPORTS: `src/ap/discovery.ts` (`parseLevelKey`, `esc`).
+ASSUMES LANDED: S4b.
+MUST NOT TOUCH: every S7 file (`src/ap/pivotSource.ts`, `src/ap/bindings.ts`, `src/pivot/*`, `src/routes/*`).
+TESTS FIRST: change the expected strings and add the new test first; red against S4b's code.
+GATE: §2 standard checks (S7's unstaged work is in the tree; the suite must still pass with it), and a scratch
+probe outside the repo that sends `buildMdx` output to :9095 for four shapes — a single-member WHERE (Date), a
+multi-member sub-select on an axis hierarchy (two Countries, Country on rows), a Sector path filter with Sector on
+rows (the drill shape), and Units `$` — and prints the four HTTP codes: all `200`. Report codes only.
+REVIEW:
+1. Is any non-slicing member still written with a level name before `[ALL]`?
+2. Did any expected string change other than member spellings?
+FAIL if: the level form survives anywhere; a probe shape is not 200.
+ROLLBACK: one `git revert` of this step.
+BUDGET: 10 min; 1 round (deep tier: it changes MDX text).
+
 **S5. An MDX cellset becomes the `PivotResult` shape the grid already renders.**
 NEW `src/ap/cellset.ts`, `src/ap/cellset.test.ts`, `src/ap/__fixtures__/cellset-rows.json`,
 `src/ap/__fixtures__/cellset-rows-cols.json`.
@@ -799,6 +829,45 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   and is replaced.
 - S6: `useGuardRules` returns null until both `/dims` and `/meta` load (S7 must wait on null); a `/meta` without
   `managers` is treated as multi-manager (refuse over wrong numbers). `checkQuery` returns a new query, never mutates.
+
+- S7: `fetchPivotLevel`'s args gain `slicing` and `depth` (orchestrator-approved); `pivotSource.ts` also exports
+  `makeArgs(model, {rows, cols, measures, filters, totals, rowTot})` which fills `cube`, `slicing`, `depth` from the
+  CubeModel, so usePivot and ChartMode never spell them.
+- S7: totals. `per_col` is asked only when `totals` and a col dim exist, `per_row` only when `rowTot` and a col dim
+  exist, `grand` when `totals` (with no col dim `per_col` would equal `grand` and `per_row` the body). Totals + col dim +
+  rowTot = the plan's 4 MDX calls; totals alone = 2.
+- S7: usePivot's base query now carries its margins in the SAME `fetchPivotLevel` call (`totals: cfg.totals`), where
+  the old code made a second `/pivot` call for the Total row. The drill passes `totals: false`. One call site builds the
+  args (`queryLevel`); fewer cube queries, same cube-computed margins.
+- S7: `usePivot(initial, {model, rules})`: either null makes `reload` and `toggleExpand` return without fetching or
+  setting an error (wait). Units: usePivot adds `[Units].[Units].[Units]: ["$"]` to the QUERY filters (never to
+  `cfg.filters`, which saved views keep); `fetchPivotLevel` reads that filter to set `units`/`dollar_measures`.
+- S7: `mergeFilters` makes each drill path entry REPLACE every other filter on its hierarchy (the parent's, and also a
+  user filter on another level of it); the deepest path entry wins. The user's shallower/deeper filter on that hierarchy
+  is lost for the drilled subtree (buildMdx refuses two filters on one).
+- S7: context fold in `Pivot.tsx`: a filter on Manager/Date/ScenarioSet that differs from the context value last folded
+  is the user's own and wins (a loaded view's Date survives a scenario change); before, context overwrote it. Manager is
+  now part of the folded context (`contextFilters`), as the step text says. `checkBindings(model)` non-empty shows an
+  error line and runs nothing.
+- S7: ChartMode takes `model` and `rules` props (Pivot passes them) and waits on null. Records are re-keyed
+  `f0..fN` in the order rows, cols, measures; a level's value is its label. Saved chart specs authored against the old
+  short names do not bind until their views are migrated (S11 or later); the builder charts f0 vs the measure alias,
+  titled with the level caption and the measure name.
+- S7: PivotGrid exports `labelHeader` and `valueHeader`; a level with no caption shows its level name, a column member
+  with no caption shows the last part of its path. FieldList (S8) still offers `/dims` short names, so until S8 adding a
+  field there fails with `bad level key`/`no depth`, and its filter chips show level keys.
+- S7 FINDING (not fixed, `src/ap/mdx.ts` is not in S7's file set): `memberKey` builds the member as
+  `[d].[h].[l].[ALL].[AllMember].[x]` and AP answers HTTP 400 to every filter in that form. Live probe 2026-10-03:
+  `[d].[h].[ALL].[AllMember].[x]` (hierarchy, not level, before `[ALL]`) returns 200 for Manager, Date and ScenarioSet;
+  the slicing short form `[Units].[Units].[Units].[$]` is fine. With the form rewritten in flight, S7's live smoke
+  passes 5/5; unrewritten it fails 5/5. Needs an S4c amendment (mdx.ts + mdx.test.ts) before S7's live run.
+
+- Amendment 2026-10-03 (orchestrator): S4c inserted from S7's report. S4's `memberKey` put the level name before
+  `[ALL]`, against S4's own text; ActivePivot 400s on it. S4c lands before S7's commit (disjoint files).
+- S4c (done, unstaged): `memberKey` writes the hierarchy form via the existing `hierKey` (made a hoisted function so
+  `memberKey` can call it). Live probe, 4 shapes (Date WHERE, two-Country sub-select with Country on rows, Sector path
+  with Sector on rows, Units `$`): 200 x4. One S7 test (`pivotSource.test.ts`, "a guard notice ends up in warning...")
+  asserts the old Date form and now fails; it is S7's fix, untouched here.
 
 ## 10. As built
 

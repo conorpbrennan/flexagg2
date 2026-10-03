@@ -1,0 +1,29 @@
+{
+  "axes": [
+    {
+      "id": 0,
+      "hierarchies": [{ "dimension": "Measures", "hierarchy": "Measures", "levelNames": ["Measures"] }],
+      "positions": [
+        [{ "namePath": ["Scenario VaR 99"], "captionPath": ["Scenario VaR 99"] }],
+        [{ "namePath": ["Net exposure"], "captionPath": ["Net exposure"] }]
+      ]
+    },
+    {
+      "id": 1,
+      "hierarchies": [{ "dimension": "Securities", "hierarchy": "Security", "levelNames": ["ALL", "Country", "Sector"] }],
+      "positions": [
+        [{ "namePath": ["AllMember", "UK", "Energy"], "captionPath": ["AllMember", "United Kingdom", "Energy sector"] }],
+        [{ "namePath": ["AllMember", "US", "Energy"], "captionPath": ["AllMember", "United States", "Energy sector"] }],
+        [{ "namePath": ["AllMember", "US", "Tech"], "captionPath": ["AllMember", "United States", "Technology"] }]
+      ]
+    },
+    { "id": -1, "hierarchies": [], "positions": [[]] }
+  ],
+  "cells": [
+    { "ordinal": 0, "value": 11.5, "formattedValue": "11.5" },
+    { "ordinal": 1, "value": 1.5, "formattedValue": "1.5" },
+    { "ordinal": 2, "value": 22.5, "formattedValue": "22.5" },
+    { "ordinal": 4, "value": 33.5, "formattedValue": "33.5" },
+    { "ordinal": 5, "value": 3.5, "formattedValue": "3.5" }
+  ]
+}

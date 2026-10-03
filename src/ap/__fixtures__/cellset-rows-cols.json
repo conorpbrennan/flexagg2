@@ -1,0 +1,44 @@
+{
+  "axes": [
+    {
+      "id": 0,
+      "hierarchies": [
+        { "dimension": "Measures", "hierarchy": "Measures", "levelNames": ["Measures"] },
+        { "dimension": "Units", "hierarchy": "Units", "levelNames": ["Units"] }
+      ],
+      "positions": [
+        [{ "namePath": ["Scenario VaR 99"], "captionPath": ["Scenario VaR 99"] }, { "namePath": ["Base"], "captionPath": ["Base"] }],
+        [{ "namePath": ["Scenario VaR 99"], "captionPath": ["Scenario VaR 99"] }, { "namePath": ["$"], "captionPath": ["$"] }],
+        [{ "namePath": ["Net exposure"], "captionPath": ["Net exposure"] }, { "namePath": ["Base"], "captionPath": ["Base"] }],
+        [{ "namePath": ["Net exposure"], "captionPath": ["Net exposure"] }, { "namePath": ["$"], "captionPath": ["$"] }]
+      ]
+    },
+    {
+      "id": 1,
+      "hierarchies": [
+        { "dimension": "Positions", "hierarchy": "Manager", "levelNames": ["ALL", "Manager"] },
+        { "dimension": "Securities", "hierarchy": "Security", "levelNames": ["ALL", "Country", "Sector"] }
+      ],
+      "positions": [
+        [
+          { "namePath": ["AllMember", "Mgr One"], "captionPath": ["AllMember", "Manager One"] },
+          { "namePath": ["AllMember", "UK"], "captionPath": ["AllMember", "United Kingdom"] }
+        ],
+        [
+          { "namePath": ["AllMember", "Mgr One"], "captionPath": ["AllMember", "Manager One"] },
+          { "namePath": ["AllMember", "US"], "captionPath": ["AllMember", "United States"] }
+        ]
+      ]
+    },
+    { "id": -1, "hierarchies": [], "positions": [[]] }
+  ],
+  "cells": [
+    { "ordinal": 0, "value": 10, "formattedValue": "10" },
+    { "ordinal": 1, "value": 20, "formattedValue": "20" },
+    { "ordinal": 2, "value": 30, "formattedValue": "30" },
+    { "ordinal": 3, "value": 40, "formattedValue": "40" },
+    { "ordinal": 4, "value": 50, "formattedValue": "50" },
+    { "ordinal": 6, "value": 70, "formattedValue": "70" },
+    { "ordinal": 7, "value": 80, "formattedValue": "80" }
+  ]
+}

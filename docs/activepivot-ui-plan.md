@@ -784,6 +784,12 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   (so it covers filters of every form), `hierarchy on two axes` is checked in `buildMdx` after axis reduction.
 - S4b: `parseLevelKey` -> `levelKey` is idempotent for any valid key, so normalising in `memberKey` changes no
   output; it now serves as validation (a malformed key throws `bad level key` from `memberKey` itself).
+- S5: one record per (row position x distinct col-level member combination), all measures in it (tidy /pivot
+  shape; the column axis has measures outermost, so one record per raw column position would split a record
+  across measures). Measures and hierarchies are found by the axis `hierarchies` names, not by order. A
+  measure or hierarchy in the cellset that `q` did not ask for throws. No rows axis (grand/per_col) = one
+  virtual row. `toPivotResult` calls the adapter with `cols: []` for `perRow`, `rows: []` for `perCol`, both
+  empty for `grand`; `grand` is `{measure: number|null}` over `q.measures`. A string cell value passes through.
 
 ## 10. As built
 

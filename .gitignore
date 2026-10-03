@@ -1,1 +1,11 @@
+node_modules/
+dist/
+*.local
+.vite/
+
+# tsc -b build outputs (vite.config.ts is the source)
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
 tmp/

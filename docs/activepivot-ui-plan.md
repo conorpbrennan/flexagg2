@@ -706,6 +706,12 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
 - ActivePivot on :9095 listens on all interfaces and grants anonymous ROLE_ADMIN (it accepted a content
   write and delete on 2026-10-03). That is a barra_poc setting, outside this plan.
 
+- S1: `.gitignore` is barra's frontend content plus this repo's existing `tmp/` line (kept).
+- S1: `vite.config.ts` proxy target reads `env.RISK_API_URL` with fallback `http://127.0.0.1:8010` (uses the
+  `loadEnv` result the step prescribes; default equals barra's hardcoded target).
+- S1: `hooks.ts` keeps `useMeta`, `useDims`, `useWhatif` (+ `Trade`), because `routes/Pivot.tsx` imports
+  `useWhatif`; `types.ts` keeps the 15 types those files, the views API and the kept tests import.
+
 ## 10. As built
 
 (Written from the tracker at the end.)

@@ -8,7 +8,51 @@
 
 ## Files involved
 
-<!-- populated on commit -->
+- .gitignore
+- docs/activepivot-ui-plan.md
+- index.html
+- package-lock.json
+- package.json
+- run/reports/S1-implementer-1.md
+- run/tracker.md
+- src/App.tsx
+- src/api/client.ts
+- src/api/hooks.ts
+- src/api/stream.test.ts
+- src/api/stream.ts
+- src/api/types.ts
+- src/api/views.ts
+- src/components/LineChart.tsx
+- src/components/Markdown.tsx
+- src/components/StreamPanel.tsx
+- src/components/svg.test.tsx
+- src/components/svg.tsx
+- src/components/ui.test.tsx
+- src/components/ui.tsx
+- src/context/AppContext.tsx
+- src/index.css
+- src/lib/format.test.ts
+- src/lib/format.ts
+- src/main.tsx
+- src/pivot/ChartMode.test.tsx
+- src/pivot/ChartMode.tsx
+- src/pivot/FieldList.tsx
+- src/pivot/PivotGrid.test.ts
+- src/pivot/PivotGrid.tsx
+- src/pivot/Repository.tsx
+- src/pivot/usePivot.test.ts
+- src/pivot/usePivot.ts
+- src/pivot/usePivotSort.test.ts
+- src/routes/Pivot.rejection.test.tsx
+- src/routes/Pivot.test.tsx
+- src/routes/Pivot.tsx
+- src/shell/ContextBar.test.tsx
+- src/shell/ContextBar.tsx
+- src/shell/LeftRail.tsx
+- src/test/setup.ts
+- tsconfig.json
+- tsconfig.node.json
+- vite.config.ts
 
 ## History
 

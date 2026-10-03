@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -194,6 +195,16 @@ def create_app(db_path: Path | str | None = None) -> FastAPI:
         return JSONResponse(
             {"detail": f"views database unavailable: {exc}"}, status_code=503
         )
+
+    @app.exception_handler(RequestValidationError)
+    async def _invalid(_request: Request, exc: RequestValidationError):
+        # The default 422 detail echoes the offending input; a bare NaN/Infinity token in it
+        # cannot be rendered as JSON and turned the 422 into a 500. Report only where and why.
+        detail = [
+            {"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]}
+            for e in exc.errors()
+        ]
+        return JSONResponse({"detail": detail}, status_code=422)
 
     app.include_router(router)
     return app

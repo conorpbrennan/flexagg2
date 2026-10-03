@@ -402,6 +402,22 @@ def test_context_manager_closes_connection(tmp_path):
         s.tree("Public")
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_save_rejects_non_finite_state_and_stores_nothing(store, bad):
+    with pytest.raises(ValueError):
+        store.save("Public", "Risk", "n", {"v": bad})
+    with pytest.raises(ValueError):
+        store.save("Public", "Risk", "n", {"deep": [{"v": bad}]})
+    assert store.tree("Public") == {"folders": {}, "views": []}
+
+
+def test_non_finite_resave_leaves_the_old_state(store):
+    store.save("Public", "Risk", "n", STATE)
+    with pytest.raises(ValueError):
+        store.save("Public", "Risk", "n", {"v": float("nan")})
+    assert store.load("Public", "Risk", "n")["state"] == STATE
+
+
 def test_close_is_idempotent(tmp_path):
     s = ViewsStore(tmp_path / "v.db")
     s.close()

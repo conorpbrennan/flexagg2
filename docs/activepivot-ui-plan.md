@@ -661,9 +661,40 @@ FAIL if: a route shape differs from barra's without a DECISIONS-OPEN entry; list
 ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: 20 min; 1 round.
 
+**S10b. A saved view can always be loaded back.** (Inserted 2026-10-03 from S10's deep review, IMPORTANT 1;
+§18.6. UNREVIEWED block: a disagreement with it is a DISAGREEMENTS entry.)
+EXTEND `server/views_store.py`, `server/tests/test_views_store.py`, `server/tests/test_views_api.py`,
+`server/views_api.py` (amendment 2026-10-03 after review round 1: NaN in any body field must be a 4xx).
+
+WHY NOW: a hand-built `PUT /views/save` whose `state` holds `NaN` or `Infinity` is stored (200), and every later
+load of that view is a 500, because the JSON response refuses non-finite numbers (reproduced by the reviewer).
+
+WHAT TO BUILD:
+- `ViewsStore` serialises state with `json.dumps(..., allow_nan=False)` wherever it writes `state_json`, so a
+  non-finite number raises `ValueError` (the API already maps it to 400) and nothing is stored.
+- (Amendment) `views_api.py`: a request body holding a non-finite token in ANY field (`name`, `folder`, top-level
+  `state`, …) gets a 4xx, never a 500. Round 1 found that pydantic's 422 detail echoes the NaN input and the JSON
+  response then fails. Fix at the edge: a `RequestValidationError` handler whose detail never echoes non-finite input
+  (or rejects non-finite tokens at body parse). Test each of the three fields.
+IMPORTS: stdlib only.
+ASSUMES LANDED: S10.
+MUST NOT TOUCH: `src/`.
+TESTS FIRST: store test: `save` with `{"v": float("nan")}` and with `float("inf")` raises `ValueError` and the tree
+is unchanged. API test: the raw body `{"name":"n","folder":"Public","state":{"v":NaN}}` (sent as raw bytes, since
+the client's JSON encoder may refuse it) gets 400, and `GET /views/item/Public/n` is 404. Red against S10.
+GATE: §2 standard checks (including pytest).
+REVIEW:
+1. Is every write of `state_json` covered (save, and any move/rename that re-serialises)?
+2. Does a NaN body (in any field) still produce any 500?
+FAIL if: a non-finite number can be stored; any path returns 500 for it.
+ROLLBACK: one `git revert` of this step.
+BUDGET: 10 min; 1 round.
+
 **S11. The Repository panel saves and loads views from the new store.**
 NEW `src/api/views.test.ts`, `src/pivot/Repository.test.tsx`. EXTEND `src/api/views.ts`, `src/api/types.ts`,
-`src/pivot/Repository.tsx`, `vite.config.ts`, `src/routes/Pivot.tsx`.
+`src/pivot/Repository.tsx`, `vite.config.ts`, `src/routes/Pivot.tsx`, `src/api/client.ts` (optional `base`, as
+WHAT TO BUILD allows), `src/routes/Pivot.test.tsx`, `src/routes/Pivot.rejection.test.tsx` (amendment 2026-10-03:
+their saved-view fixtures are `schema_version: 1`, which this step refuses by design; they move to 2).
 
 WHAT TO BUILD:
 - `vite.config.ts`: proxy `/views-api` → `env.VIEWS_TARGET || "http://127.0.0.1:8020"` (S1's `loadEnv`),
@@ -942,6 +973,28 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   mapped no 404 for folder rename/delete (missing folder was a no-op or 400); here a missing folder is 404, and
   delete/rename of a section root is 400. Move/rename onto an existing view is 400 (S9 refuses; barra overwrote).
 - S10: handlers are sync `def` (threadpool); the store's RLock serialises them.
+- S10b: only `save` writes `state_json` (move/rename/folder ops never re-serialise), so `allow_nan=False` is in
+  one place. The check runs before the transaction opens, so nothing is written and no folder is created.
+  Pydantic's `dict` field accepts the raw `NaN` token, so the store, not the route, is where it is refused.
+
+- Amendment 2026-10-03 (orchestrator): S10b inserted from S10's deep review (NaN state stored, then 500 on load).
+- S11: `src/api/client.ts` (not in the file set) gains an optional last `base` parameter (default `API_BASE`) on
+  `apiGet` and `apiSend`, as the step allows; `views.ts` passes `/views-api`. Proxy key is the regex `^/views-api/`
+  (rewrite to `/`); a bare `/views-api` would not collide with `/api` (it does not start with it), the regex is for
+  symmetry with `^/ap/`.
+- S11: level-key dropping lives in `Repository.tsx` (`fitToModel`), not `Pivot.tsx`: rows, cols, filter keys against
+  `CubeModel.levels`, measures against `CubeModel.measures` (hidden ones included). One muted line "not in the cube,
+  dropped: ..." names them. With no model yet the state passes through unchecked. `Pivot.tsx` needed no change
+  (its `currentState` is already what the store keeps) and was not touched.
+- S11: a doc whose `schema_version` is not 2 (including absent) is refused whole: `err` line, no `onLoad`, the save
+  form is not prefilled.
+- S11 FINDING (BLOCKED, not fixed): `src/routes/Pivot.test.tsx` (4 tests) and `src/routes/Pivot.rejection.test.tsx`
+  (1 test) serve a saved view with `schema_version: 1`; the Repository now refuses it, so they fail. Needs an
+  amendment adding both files to S11's set (fixtures to `schema_version: 2`; file ids may stay).
+
+- Amendment 2026-10-03 (orchestrator, from S11's report): S11's file set gains `src/api/client.ts` (the optional
+  `base` the step already allowed) and the two route test files whose v1 fixtures the v1 refusal breaks. Fixture
+  `schema_version` moves to 2; nothing else in them changes.
 
 ## 10. As built
 

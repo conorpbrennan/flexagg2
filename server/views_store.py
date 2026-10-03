@@ -252,6 +252,10 @@ class ViewsStore:
         _check_folder(folder)
         slug = slugify(name)
         now = _now_iso()
+        # allow_nan=False: NaN/Infinity would be stored but could never be served as JSON, so the
+        # view could not be loaded back. Raises ValueError before any write. The only writer of
+        # state_json (move and rename never re-serialise it).
+        state_json = json.dumps(state, allow_nan=False)
         with self._tx() as c:
             self._ensure_folders(c, section, folder)
             c.execute(
@@ -259,7 +263,7 @@ class ViewsStore:
                 "VALUES (?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(section, folder, slug) DO UPDATE SET "
                 "name = excluded.name, state_json = excluded.state_json, updated = excluded.updated",
-                (section, folder, name, slug, json.dumps(state), now, now),
+                (section, folder, name, slug, state_json, now, now),
             )
         return _file(section, folder, slug)
 

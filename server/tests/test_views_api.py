@@ -97,6 +97,53 @@ def test_save_missing_state_is_422(client):
     assert r.status_code == 422
 
 
+@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity"])
+def test_save_non_finite_state_is_400_and_not_stored(client, token):
+    raw = f'{{"name":"n","folder":"Public","state":{{"v":{token}}}}}'.encode()
+    r = client.put(
+        "/views/save", content=raw, headers={"content-type": "application/json"}
+    )
+    assert r.status_code == 400, r.text
+    assert client.get("/views/item/Public/n").status_code == 404
+
+
+@pytest.fixture
+def lenient(tmp_path: Path):
+    """A client that returns a 500 as a response instead of raising it."""
+    with TestClient(create_app(tmp_path / "v.db"), raise_server_exceptions=False) as c:
+        yield c
+
+
+@pytest.mark.parametrize(
+    "method, url, body",
+    [
+        ("put", "/views/save", '{"name":NaN,"folder":"Public","state":{}}'),
+        ("put", "/views/save", '{"name":"n","folder":NaN,"state":{}}'),
+        ("put", "/views/save", '{"name":"n","folder":"Public","state":NaN}'),
+        ("put", "/views/save", '{"name":"n","folder":"Public","state":-Infinity}'),
+        ("post", "/views/move", '{"file":NaN,"to_folder":"Public"}'),
+        ("post", "/views/move", '{"file":"Public/n","to_folder":Infinity}'),
+        ("post", "/views/rename", '{"file":"Public/n","new_name":NaN}'),
+        ("post", "/views/folder", '{"parent":NaN,"name":"x"}'),
+        ("post", "/views/folder", '{"parent":"Public","name":NaN}'),
+        ("post", "/views/folder/rename", '{"rel":"Public/x","new_name":NaN}'),
+    ],
+)
+def test_non_finite_token_in_any_body_field_is_4xx_never_500(
+    lenient, method, url, body
+):
+    r = getattr(lenient, method)(
+        url, content=body.encode(), headers={"content-type": "application/json"}
+    )
+    assert 400 <= r.status_code < 500, (r.status_code, r.text)
+    assert "nan" not in r.text.lower() and "infinity" not in r.text.lower()
+    assert lenient.get("/views/item/Public/n").status_code == 404
+    assert lenient.get("/views").json()["sections"]["Public"] == {
+        "folders": {},
+        "views": [],
+    }
+
+
 def test_resave_overwrites_and_keeps_created(client):
     f = save(client)
     created = client.get(f"/views/item/{f}").json()["created"]

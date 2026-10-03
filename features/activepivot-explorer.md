@@ -17,6 +17,10 @@
 - run/reports/S1-implementer-1.md
 - run/reports/S1-review-1.md
 - run/reports/S10-implementer-1.md
+- run/reports/S10-review-1.md
+- run/reports/S10b-implementer-1.md
+- run/reports/S10b-implementer-2.md
+- run/reports/S10b-review-1.md
 - run/reports/S2-implementer-1.md
 - run/reports/S2-review-1.md
 - run/reports/S3-implementer-1.md
@@ -109,6 +113,14 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `8f03ba3` — S10: views store served over HTTP with barra's route shapes
+  - docs/activepivot-ui-plan.md
+  - run/reports/S10-implementer-1.md
+  - run/reports/S9b-review-2.md
+  - run/tracker.md
+  - server/tests/test_views_api.py
+  - server/views_api.py
 
 - 2026-10-03 `e80947a` — S9b: a failed commit never leaves the views store in a transaction
   - docs/activepivot-ui-plan.md

@@ -23,6 +23,12 @@ export default defineConfig(({ mode }) => {
             });
           },
         },
+        // Views store (server/views_api.py): /views-api/views/... -> :8020/views/... A regex key, as for /ap/.
+        "^/views-api/": {
+          target: env.VIEWS_TARGET || "http://127.0.0.1:8020",
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/views-api\//, "/"),
+        },
         // ActivePivot REST: /ap/activeviam/... -> :9095/activeviam/... (strips exactly AP_BASE).
         "^/ap/": {
           target: env.AP_TARGET || "http://127.0.0.1:9095",

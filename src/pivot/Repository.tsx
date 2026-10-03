@@ -4,6 +4,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { listViews, loadView, saveView, deleteView } from "../api/views";
 import type { ViewTree, ViewState } from "../api/types";
+import { useCubeModel, type CubeModel } from "../ap/discovery";
+
+// Keep only the level keys and measures the current cube model has; report what was dropped.
+// Without a model nothing can be checked, so the state passes through (the pivot waits on the model too).
+function fitToModel(s: ViewState, model: CubeModel | null): { state: ViewState; dropped: string[] } {
+  if (!model) return { state: s, dropped: [] };
+  const levels = new Set(model.levels.map((l) => l.key));
+  const measures = new Set(model.measures.map((m) => m.name));
+  const dropped: string[] = [];
+  const keep = (xs: string[] | undefined, ok: Set<string>) =>
+    (xs ?? []).filter((x) => ok.has(x) || (dropped.includes(x) || dropped.push(x), false));
+  const state: ViewState = {
+    ...s,
+    rows: keep(s.rows, levels), cols: keep(s.cols, levels), measures: keep(s.measures, measures),
+  };
+  if (s.filters) {
+    state.filters = Object.fromEntries(Object.entries(s.filters).filter(([k]) => levels.has(k) || (dropped.includes(k) || dropped.push(k), false)));
+  }
+  return { state, dropped };
+}
 
 export function Repository({
   currentState, onLoad,
@@ -14,6 +34,8 @@ export function Repository({
   const [description, setDescription] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const model = useCubeModel().data ?? null;
 
   const refresh = useCallback(async () => {
     try { setSections((await listViews()).sections); }
@@ -31,12 +53,17 @@ export function Repository({
   }
 
   async function open(file: string) {
+    setErr(null); setNote(null);
     try {
       const doc = await loadView(file);
-      onLoad(doc.state, doc.name);
+      // a doc the store did not stamp v2 was written against risk_api's short names: refuse it whole
+      if ((doc.schema_version as number) !== 2) { setErr("saved before ActivePivot fields; not loadable"); return; }
+      const { state, dropped } = fitToModel(doc.state, model);
+      if (dropped.length) setNote(`not in the cube, dropped: ${dropped.join(", ")}`);
+      onLoad(state, doc.name);
       // Prefill the save form with the opened view's identity so "tweak, then Save" overwrites
       // THIS view (same name + folder) rather than writing an unnamed copy into Public.
-      setName(doc.name); setFolder(doc.path || "Public"); setDescription(doc.state.description ?? "");
+      setName(doc.name); setFolder(doc.path || "Public"); setDescription(state.description ?? "");
     }
     catch (e) { setErr((e as Error).message); }
   }
@@ -70,6 +97,7 @@ export function Repository({
         </div>
       </div>
       {err && <div className="err small">{err}</div>}
+      {note && <div className="muted small">{note}</div>}
       {Object.entries(sections).map(([sec, tree]) => (
         <div key={sec} style={{ marginTop: "0.6rem" }}>
           <div className="muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em" }}>{sec}</div>

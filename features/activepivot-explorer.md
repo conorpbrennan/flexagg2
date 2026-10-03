@@ -21,6 +21,9 @@
 - run/reports/S10b-implementer-1.md
 - run/reports/S10b-implementer-2.md
 - run/reports/S10b-review-1.md
+- run/reports/S10b-review-2.md
+- run/reports/S11-implementer-1.md
+- run/reports/S11-implementer-2.md
 - run/reports/S2-implementer-1.md
 - run/reports/S2-review-1.md
 - run/reports/S3-implementer-1.md
@@ -78,6 +81,7 @@
 - src/api/stream.test.ts
 - src/api/stream.ts
 - src/api/types.ts
+- src/api/views.test.ts
 - src/api/views.ts
 - src/components/LineChart.tsx
 - src/components/Markdown.tsx
@@ -97,6 +101,7 @@
 - src/pivot/FieldList.tsx
 - src/pivot/PivotGrid.test.ts
 - src/pivot/PivotGrid.tsx
+- src/pivot/Repository.test.tsx
 - src/pivot/Repository.tsx
 - src/pivot/usePivot.test.ts
 - src/pivot/usePivot.ts
@@ -113,6 +118,18 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `8ecdca5` — S10b: refuse non-finite numbers in saved view state
+  - docs/activepivot-ui-plan.md
+  - run/reports/S10-review-1.md
+  - run/reports/S10b-implementer-1.md
+  - run/reports/S10b-implementer-2.md
+  - run/reports/S10b-review-1.md
+  - run/tracker.md
+  - server/tests/test_views_api.py
+  - server/tests/test_views_store.py
+  - server/views_api.py
+  - server/views_store.py
 
 - 2026-10-03 `8f03ba3` — S10: views store served over HTTP with barra's route shapes
   - docs/activepivot-ui-plan.md

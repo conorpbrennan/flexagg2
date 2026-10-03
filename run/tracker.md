@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
-BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min), S8 ~10 min, S9 ~7 min, S9b ~15 min, S10 ~6 min.
-IN FLIGHT: S10b review round 2 (worktree) and S11 fix implementer (main tree, src/ only) in parallel.
+BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min), S8 ~10 min, S9 ~7 min, S9b ~15 min, S10 ~6 min, S10b ~12 min.
+IN FLIGHT: S11 review round 1.
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -140,8 +140,10 @@ STEP S10: PASS
   disagreements: barra lacks 404 on folder rename/delete and overwrites on move/rename; store behaviour kept (404s, refuse overwrite -> 400)
   decisions:     plan §9 S10 lines (create_app factory, .json accepted+stripped, 503 on lock timeout, section-prefixed folders)
 
-STEP S10b: FAILED ROUND 1 -> fix round 2 done; review round 2 (whole staged diff) — inserted 2026-10-03 from S10 review IMPORTANT 1
+STEP S10b: PASS (round 2)
+  commit:  8ecdca5 — inserted 2026-10-03 from S10 review IMPORTANT 1
   reviews: code-reviewer r1 FAIL, critical 1 (bare NaN in name/folder/state -> 500 via 422 echo) (~2 min); report run/reports/S10b-review-1.md
+           code-reviewer r2 PASS, advisory 3 (~1 min); report run/reports/S10b-review-2.md
   reports: run/reports/S10b-implementer-1.md, S10b-implementer-2.md (422 handler drops input; pytest 91)
   gate:    tsc -b 0; vitest 0 (19 / 178); pytest 81 passed; ruff clean
   stage:   server/views_store.py, server/tests/test_views_store.py, server/tests/test_views_api.py, plan (S10b block + §9), tracker, S10 review report, S10b implementer report
@@ -149,8 +151,9 @@ STEP S10b: FAILED ROUND 1 -> fix round 2 done; review round 2 (whole staged diff
   disagreements: none (save is the only state_json writer)
   decisions:     plan §9 S10b lines (check before the transaction; refusal in the store)
 
-STEP S11: IN FLIGHT (implementation done, unstaged; fix pending for amended file set — v1 route-test fixtures)
-  reports: run/reports/S11-implementer-1.md
+STEP S11: IN FLIGHT (review round 1)
+  reports: run/reports/S11-implementer-1.md, S11-implementer-2.md (pre-review fix: v2 fixtures + fixture measure swap; vitest 188/188)
+  stage:   S11 amended file set (9 files), plan, tracker, S10b review-2 report, S11 implementer reports
   gate:    tsc -b 0; vitest 5 fails in Pivot*.test.tsx (v1 fixtures, outside set) -> plan amended; pytest 81; live proxy smoke save/list/load 200
   disagreements: route tests relied on v1 loading; schema_version compared as number
   decisions:     plan §9 S11 lines (client.ts base param, ^/views-api/ regex proxy, fitToModel drop line, v1/absent refused whole)

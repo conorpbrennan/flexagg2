@@ -37,8 +37,9 @@ async function parseError(res: Response): Promise<string> {
 export async function apiGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | null | undefined>,
+  base: string = API_BASE,
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}${qs(params)}`);
+  const res = await fetch(`${base}${path}${qs(params)}`);
   if (!res.ok) throw new ApiError(res.status, await parseError(res));
   return res.json() as Promise<T>;
 }
@@ -47,8 +48,9 @@ export async function apiSend<T>(
   method: "POST" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
+  base: string = API_BASE,
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${base}${path}`, {
     method,
     headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,

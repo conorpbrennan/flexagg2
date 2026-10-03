@@ -90,7 +90,7 @@ export interface ViewLeaf {
 }
 export interface ViewTree { folders: Record<string, ViewTree>; views: ViewLeaf[] }
 export interface ViewDoc {
-  schema_version: number; name: string; path: string;
+  schema_version: 2; name: string; path: string;   // the store emits 2; anything else is refused on load
   created: string; updated: string; state: ViewState;
 }
 export interface PivotQuery {

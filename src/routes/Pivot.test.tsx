@@ -48,8 +48,8 @@ const META = {
 
 // the saved "Concentration — Risk HHI" view: ScenarioSet on rows, Risk HHI measure, an older Date
 const HHI_VIEW = {
-  schema_version: 1, name: "Concentration — Risk HHI", path: "Public", created: "", updated: "",
-  state: { rows: [SCEN], cols: [], measures: ["Risk HHI"],
+  schema_version: 2, name: "Concentration — Risk HHI", path: "Public", created: "", updated: "",
+  state: { rows: [SCEN], cols: [], measures: ["Scenario VaR 99"],
            filters: { [MGR]: ["Soros"], [DATE]: ["2024-11-30"] }, row_tot: false, render: "grid" },
 };
 
@@ -64,7 +64,7 @@ beforeEach(() => {
     const records = a.rows[0] === FG
       ? [{ ...rec(FG, "Financials"), "Net exposure": 1 }, { ...rec(FG, "Energy"), "Net exposure": 2 }]
       : a.rows[0] === SCEN
-        ? [{ ...rec(SCEN, "HistFull"), "Risk HHI": 0.03 }, { ...rec(SCEN, "Hypo:RiskOff"), "Risk HHI": 0.18 }]
+        ? [{ ...rec(SCEN, "HistFull"), "Scenario VaR 99": 0.03 }, { ...rec(SCEN, "Hypo:RiskOff"), "Scenario VaR 99": 0.18 }]
         : [];
     return { rows: a.rows, cols: a.cols, measures: a.measures, totals: false, warning: null, records };
   });

@@ -45,7 +45,7 @@ const REJECTION_TAIL = "under every manager's label.";
 
 // the saved view a user picks that happens to select a manager-independent measure
 const REJECTED_VIEW = {
-  schema_version: 1, name: "Factor contribution by name", path: "Public", created: "", updated: "",
+  schema_version: 2, name: "Factor contribution by name", path: "Public", created: "", updated: "",
   state: { rows: [FG], cols: [], measures: ["Factor contribution"],
            filters: { [BINDINGS.manager]: ["Soros"], [BINDINGS.date]: ["2024-12-31"] }, row_tot: false, render: "grid" },
 };

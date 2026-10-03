@@ -44,6 +44,8 @@ export interface Dims {
   measures: string[];
   scenario_dependent: string[];
   day_dependent?: string[];   // the Day-path measures (PnL at day & co.) — need a DaySet context
+  price_dependent?: string[];
+  dollar_measures?: string[];
   members: Record<string, string[]>;
   dates: string[];
   scenario_sets: string[];

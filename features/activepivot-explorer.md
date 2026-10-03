@@ -24,6 +24,8 @@
 - run/reports/S4b-implementer-1.md
 - run/reports/S4b-review-1.md
 - run/reports/S5-implementer-1.md
+- run/reports/S5-review-1.md
+- run/reports/S6-implementer-1.md
 - run/tracker.md
 - src/App.tsx
 - src/ap/__fixtures__/cellset-rows-cols.json
@@ -35,6 +37,8 @@
 - src/ap/client.ts
 - src/ap/discovery.test.ts
 - src/ap/discovery.ts
+- src/ap/guards.test.ts
+- src/ap/guards.ts
 - src/ap/mdx.test.ts
 - src/ap/mdx.ts
 - src/api/client.ts
@@ -76,6 +80,16 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `9573cdb` — S5: MDX cellset -> PivotResult adapter
+  - docs/activepivot-ui-plan.md
+  - run/reports/S4b-review-1.md
+  - run/reports/S5-implementer-1.md
+  - run/tracker.md
+  - src/ap/__fixtures__/cellset-rows-cols.json
+  - src/ap/__fixtures__/cellset-rows.json
+  - src/ap/cellset.test.ts
+  - src/ap/cellset.ts
 
 - 2026-10-03 `13944a8` — S4b: MDX builder picks the deepest level by real depth
   - docs/activepivot-ui-plan.md

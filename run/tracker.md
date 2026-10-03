@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
-BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min.
-IN FLIGHT: S5 review round 1.
+BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min.
+IN FLIGHT: S6 review round 1.
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -60,10 +60,20 @@ STEP S4b: PASS — inserted 2026-10-03 from S4 review IMPORTANT 1-4
   disagreements: gate grep needed -F (fixed in plan); memberKey normalisation is validation only; implementer used python heredocs for edits (harness rule), order still test-first
   decisions:     plan §9 S4b lines
 
-STEP S5: IN FLIGHT (review round 1)
+STEP S5: PASS
+  commit:  9573cdb
+  reviews: code-reviewer r1 PASS, advisory 2 (~1 min); report run/reports/S5-review-1.md
   reports: run/reports/S5-implementer-1.md
   gate:    tsc -b 0; vitest 0 (15 files / 108 tests)
   stage:   src/ap/cellset.ts, cellset.test.ts, __fixtures__/cellset-rows.json, cellset-rows-cols.json, plan (§9), tracker, S4b review report, S5 implementer report
   files:   as declared
   disagreements: record per (row x col-level combination) holding all measures, not per raw column position; positions matched to levels via axis hierarchies names
   decisions:     plan §9 S5 lines (exact throws, virtual row when no ROWS axis, string values pass through)
+
+STEP S6: IN FLIGHT (review round 1)
+  reports: run/reports/S6-implementer-1.md
+  gate:    tsc -b 0; vitest 0 (16 files / 127 tests)
+  stage:   src/ap/guards.ts, guards.test.ts, src/api/types.ts, plan (§9), tracker, S5 review report, S6 implementer report
+  files:   as declared
+  disagreements: rule 4 quiet when DaySet/PriceSet on an axis (as risk_api); rule 2 stricter than risk_api (as planned)
+  decisions:     plan §9 S6 lines (hierarchy matching via parseLevelKey, null until dims+meta, missing managers = multi)

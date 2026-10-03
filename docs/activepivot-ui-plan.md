@@ -791,6 +791,15 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   virtual row. `toPivotResult` calls the adapter with `cols: []` for `perRow`, `rows: []` for `perCol`, both
   empty for `grand`; `grand` is `{measure: number|null}` over `q.measures`. A string cell value passes through.
 
+- S6: `Bindings` has no DaySet/PriceSet keys, so rule 4 matches those hierarchies by hierarchy name
+  (`DaySet`, `PriceSet`) via `parseLevelKey`; Manager/Date/ScenarioSet match by hierarchy (dim+hier) of the bound key.
+- S6: rule 4 stays quiet when DaySet/PriceSet is on an axis as well as when filtered (risk_api's `day_ctx`/`price_ctx`
+  accept both; the step text says "filter" only). Rule 2 follows the step text (axis or exactly one filter member),
+  stricter than risk_api. Rule 3 adds no filter when `latestDate` is null. An empty-list Date filter counts as unfiltered
+  and is replaced.
+- S6: `useGuardRules` returns null until both `/dims` and `/meta` load (S7 must wait on null); a `/meta` without
+  `managers` is treated as multi-manager (refuse over wrong numbers). `checkQuery` returns a new query, never mutates.
+
 ## 10. As built
 
 (Written from the tracker at the end.)

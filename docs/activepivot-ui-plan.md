@@ -883,6 +883,19 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   signal?)`: cube, slicing and depth come from the `CubeModel` (S4b made them required).
 - Open for the owner (S8): with a binding missing, S7's Pivot.tsx shows the missing-levels line and runs nothing;
   the plan said "the pivot still works without the context". Kept S7's stricter behaviour (no unguarded query).
+- S9: `file` ids carry no `.json` suffix (`Public/Risk/slug`), per the step text; barra's carried one. S10 and the
+  frontend must not append it. `path` on a leaf and in a ViewDoc is `<section>/<folder>` as in barra.
+- S9: folder arguments are relative to the section (`""` = section root). `parse_file(file)` is added so S10 can
+  split a `file` id into `(section, folder, slug)` with every segment checked.
+- S9: missing view or folder raises `FileNotFoundError` (S10: 404); bad section, path, clash or non-empty folder
+  raises `ValueError` (S10: 400). Barra raised `ValueError` for a missing folder.
+- S9: `move_view` and `rename_view` refuse to overwrite an existing view (`ValueError`); barra overwrote silently.
+  `rename_folder` refuses an existing target. `save` into a missing folder creates it and its ancestors (as barra).
+- S9: segments reject empty/blank, `.`, `..`, `/`, `\` and control characters; unicode look-alikes are accepted as
+  plain characters (rows, not paths, so they reach nothing). `make_folder` rejects rather than sanitises a name
+  (barra's `folder_name` replaced separators with a space).
+- S9: `delete_view` is idempotent (as barra). `schema_version` is the constant 2 emitted on load, not a stored column.
+- S9: one connection behind an RLock, `BEGIN IMMEDIATE` per write, so FastAPI's threadpool is safe.
 
 ## 10. As built
 

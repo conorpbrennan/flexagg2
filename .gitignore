@@ -9,3 +9,10 @@ vite.config.js
 vite.config.d.ts
 
 tmp/
+
+# server: virtualenv and runtime data (the views SQLite db)
+.venv/
+data/
+__pycache__/
+.pytest_cache/
+.ruff_cache/

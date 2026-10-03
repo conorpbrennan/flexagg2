@@ -13,6 +13,7 @@
 - index.html
 - package-lock.json
 - package.json
+- pytest.ini
 - run/reports/S1-implementer-1.md
 - run/reports/S1-review-1.md
 - run/reports/S2-implementer-1.md
@@ -34,7 +35,14 @@
 - run/reports/S7-review-1.md
 - run/reports/S8-implementer-1.md
 - run/reports/S8-implementer-2.md
+- run/reports/S8-review-1.md
+- run/reports/S9-implementer-1.md
 - run/tracker.md
+- server/__init__.py
+- server/requirements.txt
+- server/tests/__init__.py
+- server/tests/test_views_store.py
+- server/views_store.py
 - src/App.tsx
 - src/ap/__fixtures__/cellset-rows-cols.json
 - src/ap/__fixtures__/cellset-rows.json
@@ -93,6 +101,19 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `1e20da2` — S8: field list and filter pickers speak ActivePivot levels
+  - docs/activepivot-ui-plan.md
+  - run/reports/S7-review-1.md
+  - run/reports/S8-implementer-1.md
+  - run/reports/S8-implementer-2.md
+  - run/tracker.md
+  - src/ap/pivotSource.test.ts
+  - src/ap/pivotSource.ts
+  - src/pivot/FieldList.test.tsx
+  - src/pivot/FieldList.tsx
+  - src/routes/Pivot.test.tsx
+  - src/routes/Pivot.tsx
 
 - 2026-10-03 `393f342` — S7: pivot grid and chart mode run on ActivePivot
   - run/reports/S4c-review-1.md

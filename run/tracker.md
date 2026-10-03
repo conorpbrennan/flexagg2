@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
-BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min).
-IN FLIGHT: S8 review round 1.
+BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min), S8 ~10 min.
+IN FLIGHT: S9 deep review round 1.
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -99,9 +99,20 @@ STEP S7: PASS
   disagreements: S4 memberKey level-before-[ALL] form 400s live (orchestrator confirmed) -> inserted S4c; usePivot call sites merged; enabled done imperatively
   decisions:     plan §9 S7 lines (makeArgs adds slicing+depth, margin query counts, Units filter in query only, drill replaces hierarchy filter, context fold, ChartMode aliases)
 
-STEP S8: IN FLIGHT (review round 1)
+STEP S8: PASS
+  commit:  1e20da2
+  reviews: code-reviewer r1 PASS, advisory 3 (~1 min); report run/reports/S8-review-1.md
   reports: run/reports/S8-implementer-1.md, S8-implementer-2.md (pre-review fix, amended file set)
   gate:    tsc -b 0; vitest 0 (19 files / 178 tests) after fix; live fetchMembers OK on 6 levels incl. Position (5173); 86 of 175 measures visible (orchestrator re-check)
   stage:   S8 file set (6 files incl. amended Pivot.test.tsx), plan, tracker, S7 review report, S8 implementer reports
   disagreements: fetchMembers(model, levelKey, signal?) (amended); missing-bindings line already from S7, pivot does not run without bindings (kept; open for owner in §9)
   decisions:     plan §9 S8 lines
+
+STEP S9: IN FLIGHT (deep review round 1)
+  reports: run/reports/S9-implementer-1.md
+  gate:    pytest 41 passed; tsc -b 0; vitest 0 (19 / 178); ruff clean
+  stage:   server/ (6 files), pytest.ini, .gitignore, plan (§9), tracker, S8 review report, S9 implementer report
+  files:   as declared
+  orchestrator edit: .gitignore += __pycache__/, .pytest_cache/, .ruff_cache/ (pyc files had been staged); disclosed to the reviewer
+  disagreements: file ids without .json (step text over barra); folder separators rejected not sanitised; move/rename refuse to overwrite
+  decisions:     plan §9 S9 lines (parse_file, 404/400 split, BEGIN IMMEDIATE transactions, pinned versions)

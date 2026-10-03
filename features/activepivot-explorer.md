@@ -18,6 +18,8 @@
 - run/reports/S2-implementer-1.md
 - run/reports/S2-review-1.md
 - run/reports/S3-implementer-1.md
+- run/reports/S3-review-1.md
+- run/reports/S4-implementer-1.md
 - run/tracker.md
 - src/App.tsx
 - src/ap/__fixtures__/discovery.json
@@ -25,6 +27,8 @@
 - src/ap/client.ts
 - src/ap/discovery.test.ts
 - src/ap/discovery.ts
+- src/ap/mdx.test.ts
+- src/ap/mdx.ts
 - src/api/client.ts
 - src/api/hooks.ts
 - src/api/stream.test.ts
@@ -64,6 +68,16 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `69bd722` — S3: typed cube model from ActivePivot discovery
+  - docs/activepivot-ui-plan.md
+  - run/reports/S2-review-1.md
+  - run/reports/S3-implementer-1.md
+  - run/tracker.md
+  - src/ap/__fixtures__/discovery.json
+  - src/ap/client.ts
+  - src/ap/discovery.test.ts
+  - src/ap/discovery.ts
 
 - 2026-10-03 `08e453e` — S2: ActivePivot REST client behind a same-origin /ap dev proxy
   - docs/activepivot-ui-plan.md

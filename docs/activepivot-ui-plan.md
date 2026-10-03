@@ -731,6 +731,14 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   (e.g. `PositionRank`) are kept in `levels`; the field list decides what to show.
 - S3: fixture drops `defaultMembers`, `contextValues`, `dimensions[].type` is kept as live; measures cut to 15
   (3 hidden, one without `formatString`).
+- S4: `buildMdx` cannot know level depth (no CubeModel), so for several levels of one hierarchy on an axis the
+  LAST one in the caller's order is the deepest (the drill sends Country then Sector). Callers must order
+  shallow to deep. Hierarchies keep first-seen order on the axis.
+- S4: two filters on levels of one hierarchy throw `two filters on one hierarchy: [d].[h]`; a filter with an
+  empty member list is ignored; a slicing-level member whose path has more than one part throws.
+- S4: MDX shape: `CrossJoin(a, b)` nested left to right; first filter is the innermost sub-select; WHERE
+  tuples keep filter key order. Live: `[Positions].[Manager].[Manager].Members` on rows returns HTTP 400
+  even hand-written with one measure (other hierarchies 200); not an S4 shape issue, S7 should look.
 
 ## 10. As built
 

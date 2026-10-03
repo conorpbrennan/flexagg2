@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
-BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min.
-IN FLIGHT: S3 review round 1.
+BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min.
+IN FLIGHT: S4 deep review round 1.
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -30,10 +30,20 @@ STEP S2: PASS
   disagreements: bare `/ap` proxy key matches `/api/...` -> regex key `^/ap/`; live facts name no discovery fields -> RawDiscovery minimal, S3 widens (S3 file set amended to EXTEND src/ap/client.ts)
   decisions:     plan §9 S2 lines (3)
 
-STEP S3: IN FLIGHT (review round 1)
+STEP S3: PASS
+  commit:  69bd722
+  reviews: code-reviewer r1 PASS (~1 min); report run/reports/S3-review-1.md
   reports: run/reports/S3-implementer-1.md
   gate:    tsc -b 0; vitest 0 (13 files / 59 tests); fixture JSON parses
   stage:   src/ap/discovery.ts, discovery.test.ts, __fixtures__/discovery.json, src/ap/client.ts (amended EXTEND), plan (S3 amendment + §9), tracker, S2 review report, S3 implementer report
   files:   as declared (with the 2026-10-03 amendment)
   disagreements: none
   decisions:     plan §9 S3 lines (formatString "", all-catalog search, slicing excludes Epoch, hidden hierarchies kept)
+
+STEP S4: IN FLIGHT (deep review round 1)
+  reports: run/reports/S4-implementer-1.md
+  gate:    tsc -b 0; vitest 0 (14 files / 82 tests); live: 7 shapes 200
+  stage:   src/ap/mdx.ts, src/ap/mdx.test.ts, plan (§9), tracker, S3 review report, S4 implementer report
+  files:   as declared
+  disagreements: "deepest level" without depth in ApQuery -> last in caller order; Manager-on-rows 400 = AP retrieval limit (CancellationException), not MDX shape — S7 must keep the date context filter
+  decisions:     plan §9 S4 lines (deepest=last, two filters on one hierarchy throw, empty filter ignored, nesting order)

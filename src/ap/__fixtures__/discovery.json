@@ -1,0 +1,573 @@
+{
+ "catalogs": [
+  {
+   "name": "atoti",
+   "cubes": [
+    {
+     "name": "Exposures",
+     "caption": "Exposures",
+     "measures": [
+      {
+       "name": "contributors.COUNT",
+       "caption": "contributors.COUNT",
+       "formatString": "#,###",
+       "type": "long",
+       "visible": true
+      },
+      {
+       "name": "Net exposure",
+       "caption": "Net exposure",
+       "formatString": "0.000",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Scenario VaR 99",
+       "caption": "Scenario VaR 99",
+       "formatString": "0.00%",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Total VaR 99",
+       "caption": "Total VaR 99",
+       "formatString": "0.00%",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Manager MV",
+       "caption": "Manager MV",
+       "formatString": "#,##0",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Factor contribution",
+       "caption": "Factor contribution",
+       "formatString": "0.00%",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Factor variance contribution",
+       "caption": "Factor variance contribution",
+       "formatString": "#,###.00",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Price VaR 95",
+       "caption": "Price VaR 95",
+       "formatString": "0.00%",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Scenario PnL vector",
+       "caption": "Scenario PnL vector",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Scenario PnL sorted",
+       "caption": "Scenario PnL sorted",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Min-variance hedge ratio",
+       "caption": "Min-variance hedge ratio",
+       "formatString": "0.000",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Vol mult",
+       "caption": "Vol mult",
+       "formatString": "#,###.00",
+       "type": "double",
+       "visible": true
+      },
+      {
+       "name": "Exposures.Loading.SINGLE_VALUE_NULLABLE__#__3",
+       "caption": "Exposures.Loading.SINGLE_VALUE_NULLABLE__#__3",
+       "formatString": "#,###.00",
+       "type": "double",
+       "visible": false
+      },
+      {
+       "name": "SpecificPnL.SpecPnL.SINGLE_VALUE_NULLABLE__#__5v",
+       "caption": "SpecificPnL.SpecPnL.SINGLE_VALUE_NULLABLE__#__5v",
+       "formatString": "#,###.00",
+       "type": "double",
+       "visible": false
+      },
+      {
+       "name": "update.TIMESTAMP",
+       "caption": "update.TIMESTAMP",
+       "type": "Object",
+       "visible": false
+      }
+     ],
+     "dimensions": [
+      {
+       "name": "Exposures",
+       "caption": "Exposures",
+       "type": "REGULAR",
+       "defaultHierarchy": "PositionRank",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "PositionRank",
+         "caption": "PositionRank",
+         "slicing": false,
+         "visible": false,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "PositionR",
+           "caption": "PositionR",
+           "type": "REGULAR"
+          }
+         ]
+        },
+        {
+         "name": "Date",
+         "caption": "Date",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "Date",
+           "caption": "Date",
+           "type": "TIME"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "StressShock",
+       "caption": "StressShock",
+       "type": "REGULAR",
+       "defaultHierarchy": "StressShock",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "StressShock",
+         "caption": "StressShock",
+         "slicing": true,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "StressShock",
+           "caption": "StressShock",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "CorrStress",
+       "caption": "CorrStress",
+       "type": "REGULAR",
+       "defaultHierarchy": "CorrStress",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "CorrStress",
+         "caption": "CorrStress",
+         "slicing": true,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "CorrStress",
+           "caption": "CorrStress",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "FactorMeta",
+       "caption": "FactorMeta",
+       "type": "REGULAR",
+       "defaultHierarchy": "FactorDim",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "FactorDim",
+         "caption": "FactorDim",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "FactorGroup",
+           "caption": "FactorGroup",
+           "type": "REGULAR"
+          },
+          {
+           "name": "Factor",
+           "caption": "Factor",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "Securities",
+       "caption": "Securities",
+       "type": "REGULAR",
+       "defaultHierarchy": "Security",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "Security",
+         "caption": "Security",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "Country",
+           "caption": "Country",
+           "type": "REGULAR"
+          },
+          {
+           "name": "Sector",
+           "caption": "Sector",
+           "type": "REGULAR"
+          },
+          {
+           "name": "Issuer",
+           "caption": "Issuer",
+           "type": "REGULAR"
+          },
+          {
+           "name": "Position",
+           "caption": "Position",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "Units",
+       "caption": "Units",
+       "type": "REGULAR",
+       "defaultHierarchy": "Units",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "Units",
+         "caption": "Units",
+         "slicing": true,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "Units",
+           "caption": "Units",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "ScenarioDay",
+       "caption": "ScenarioDay",
+       "type": "REGULAR",
+       "defaultHierarchy": "ScenarioDay",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "ScenarioDay",
+         "caption": "ScenarioDay",
+         "slicing": true,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ScenarioDay",
+           "caption": "ScenarioDay",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "StockReturns",
+       "caption": "StockReturns",
+       "type": "REGULAR",
+       "defaultHierarchy": "PriceSet",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "PriceSet",
+         "caption": "PriceSet",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "PriceSet",
+           "caption": "PriceSet",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "Managers",
+       "caption": "Managers",
+       "type": "REGULAR",
+       "defaultHierarchy": "Entity",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "Entity",
+         "caption": "Entity",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "FirmType",
+           "caption": "FirmType",
+           "type": "REGULAR"
+          },
+          {
+           "name": "EntityName",
+           "caption": "EntityName",
+           "type": "REGULAR"
+          },
+          {
+           "name": "CIK",
+           "caption": "CIK",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "PITScenarios",
+       "caption": "PITScenarios",
+       "type": "REGULAR",
+       "defaultHierarchy": "PITSet",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "PITSet",
+         "caption": "PITSet",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "PITSet",
+           "caption": "PITSet",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "Scenarios",
+       "caption": "Scenarios",
+       "type": "REGULAR",
+       "defaultHierarchy": "ScenarioSet",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "ScenarioSet",
+         "caption": "ScenarioSet",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "ScenarioSet",
+           "caption": "ScenarioSet",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "Positions",
+       "caption": "Positions",
+       "type": "REGULAR",
+       "defaultHierarchy": "Manager",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "Manager",
+         "caption": "Manager",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "Manager",
+           "caption": "Manager",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "ScenarioDays",
+       "caption": "ScenarioDays",
+       "type": "REGULAR",
+       "defaultHierarchy": "Day",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "Day",
+         "caption": "Day",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "Day",
+           "caption": "Day",
+           "type": "REGULAR"
+          }
+         ]
+        },
+        {
+         "name": "DayDate",
+         "caption": "DayDate",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "DayDate",
+           "caption": "DayDate",
+           "type": "TIME"
+          }
+         ]
+        },
+        {
+         "name": "DaySet",
+         "caption": "DaySet",
+         "slicing": false,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "ALL",
+           "caption": "ALL",
+           "type": "ALL"
+          },
+          {
+           "name": "DaySet",
+           "caption": "DaySet",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "name": "Epoch",
+       "caption": "Source Simulation",
+       "type": "REGULAR",
+       "defaultHierarchy": "Epoch",
+       "visible": true,
+       "hierarchies": [
+        {
+         "name": "Epoch",
+         "caption": "Source Simulation",
+         "slicing": true,
+         "visible": true,
+         "virtual": false,
+         "levels": [
+          {
+           "name": "Branch",
+           "caption": "Scenario",
+           "type": "REGULAR"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

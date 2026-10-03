@@ -14,9 +14,35 @@ export class ApError extends Error {
   }
 }
 
-// Only the fields probed live (plan §2 "Live facts"): one catalog holding cubes, each named.
+// Exactly the discovery fields toCubeModel reads, as the live response spells them. Level `type` is
+// "ALL" for the synthetic top level; `formatString` is absent on some measures.
+export interface RawLevel {
+  name: string;
+  caption: string;
+  type: string;
+}
+export interface RawHierarchy {
+  name: string;
+  slicing: boolean;
+  levels: RawLevel[];
+}
+export interface RawDimension {
+  name: string;
+  hierarchies: RawHierarchy[];
+}
+export interface RawMeasure {
+  name: string;
+  caption: string;
+  formatString?: string;
+  visible: boolean;
+}
+export interface RawCube {
+  name: string;
+  dimensions: RawDimension[];
+  measures: RawMeasure[];
+}
 export interface RawDiscovery {
-  catalogs: { name: string; cubes: { name: string }[] }[];
+  catalogs: { name: string; cubes: RawCube[] }[];
 }
 
 export interface RawPosition {

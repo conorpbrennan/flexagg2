@@ -239,7 +239,9 @@ ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: 15 min; 1 round.
 
 **S3. The cube's shape is available as a typed model built from discovery.**
-NEW `src/ap/discovery.ts`, `src/ap/discovery.test.ts`, `src/ap/__fixtures__/discovery.json`.
+NEW `src/ap/discovery.ts`, `src/ap/discovery.test.ts`, `src/ap/__fixtures__/discovery.json`. EXTEND
+`src/ap/client.ts` (widen `RawDiscovery` to exactly the discovery fields `toCubeModel` reads, as the live response
+spells them; amendment 2026-10-03, S2 left it minimal).
 
 WHAT TO BUILD:
 - Fixture: the live discovery response, trimmed to the `Exposures` cube with every dimension/hierarchy/level
@@ -717,6 +719,18 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   beyond catalog and cube); S3 widens it when it types the model.
 - S2: error trimming falls back to the code-stripped text, then `HTTP <status>`, so a message is never "".
   Error bodies with an empty or absent `errorChain` give `HTTP <status>`.
+
+- Amendment 2026-10-03 (orchestrator, from S2's report): S3's file set gains EXTEND `src/ap/client.ts`. S2 typed
+  `RawDiscovery` with only catalog and cube names (the live facts list nothing more), so S3 widens it to the
+  fields it reads. `client.ts` stays the single owner of the raw types.
+
+- S3: `MeasureInfo.formatString` is `""` when discovery omits it (some hidden measures); the `Raw*` types in
+  `client.ts` mark it optional.
+- S3: `toCubeModel` searches all catalogs for the cube name; `CubeModel.slicing` lists every non-`ALL` level of
+  every slicing hierarchy except `Epoch` (4 on this cube, one level each). Hierarchies with `visible: false`
+  (e.g. `PositionRank`) are kept in `levels`; the field list decides what to show.
+- S3: fixture drops `defaultMembers`, `contextValues`, `dimensions[].type` is kept as live; measures cut to 15
+  (3 hidden, one without `formatString`).
 
 ## 10. As built
 

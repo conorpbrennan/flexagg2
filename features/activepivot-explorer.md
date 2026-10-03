@@ -16,10 +16,15 @@
 - run/reports/S1-implementer-1.md
 - run/reports/S1-review-1.md
 - run/reports/S2-implementer-1.md
+- run/reports/S2-review-1.md
+- run/reports/S3-implementer-1.md
 - run/tracker.md
 - src/App.tsx
+- src/ap/__fixtures__/discovery.json
 - src/ap/client.test.ts
 - src/ap/client.ts
+- src/ap/discovery.test.ts
+- src/ap/discovery.ts
 - src/api/client.ts
 - src/api/hooks.ts
 - src/api/stream.test.ts
@@ -59,6 +64,15 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `08e453e` — S2: ActivePivot REST client behind a same-origin /ap dev proxy
+  - docs/activepivot-ui-plan.md
+  - run/reports/S1-review-1.md
+  - run/reports/S2-implementer-1.md
+  - run/tracker.md
+  - src/ap/client.test.ts
+  - src/ap/client.ts
+  - vite.config.ts
 
 - 2026-10-03 `2cee46d` — S1: seed — trimmed copy of barra_poc's Vite UI (pivot workspace only)
   - .gitignore

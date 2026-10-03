@@ -606,6 +606,34 @@ FAIL if: string-built SQL; a rename that can half-apply; a path check that only 
 ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: 30 min; 1–2 rounds (deep).
 
+**S9b. A failed commit never leaves the views store inside a transaction.** (Inserted 2026-10-03 from S9's
+deep review, IMPORTANT 1; §18.6. UNREVIEWED block: a disagreement with it is a DISAGREEMENTS entry.)
+EXTEND `server/views_store.py`, `server/tests/test_views_store.py`.
+
+WHY NOW: S10 serves the store, and a second SQLite connection (a backup, the sqlite3 CLI, a second worker) makes
+`COMMIT` fail with "database is locked". S9's `_tx` runs `COMMIT` outside its `try`, so the connection stays in a
+transaction: the caller is told the change failed while the store's own reads show it applied, and every later
+write fails until restart (reproduced by the reviewer).
+
+WHAT TO BUILD:
+- `_tx`: `COMMIT` inside the `try`; on any exception, `ROLLBACK` if `in_transaction`, then re-raise.
+- `ViewsStore.close()` and context-manager support (`__enter__`/`__exit__` closing the connection), so S10 can own
+  the store's lifetime. Nothing else changes.
+IMPORTS: stdlib only.
+ASSUMES LANDED: S9.
+MUST NOT TOUCH: `src/`, `server/views_api.py` (S10).
+TESTS FIRST: a second `sqlite3` connection opens `BEGIN` and reads `views`; the store, opened with a short busy
+timeout, attempts a write that must raise; then assert the store's connection is not `in_transaction`, its `tree`
+does not show the failed change, and after the reader closes the next write succeeds. Plus: `with ViewsStore(p) as
+s:` closes on exit. Red against S9's `_tx`.
+GATE: §2 standard checks (including pytest).
+REVIEW (deep tier):
+1. Can any exception path (including during `COMMIT` and `BaseException`) leave `in_transaction` true?
+2. Does the new test fail on S9's `_tx` (check by mutation)?
+FAIL if: an exception path leaves the connection in a transaction; the test does not fail on S9's code.
+ROLLBACK: one `git revert` of this step.
+BUDGET: 10 min; 1 round.
+
 **S10. The views store is served over HTTP with the route shapes barra's Repository already uses.**
 NEW `server/views_api.py`, `server/tests/test_views_api.py`.
 
@@ -896,6 +924,13 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   (barra's `folder_name` replaced separators with a space).
 - S9: `delete_view` is idempotent (as barra). `schema_version` is the constant 2 emitted on load, not a stored column.
 - S9: one connection behind an RLock, `BEGIN IMMEDIATE` per write, so FastAPI's threadpool is safe.
+
+- Amendment 2026-10-03 (orchestrator): S9b inserted from S9's deep review (COMMIT outside try wedges the
+  connection when a second connection holds a lock). S10 should open the store once and close it on shutdown.
+- S9b (implementer): the test sets the short busy timeout with `PRAGMA busy_timeout=50` on the store's connection
+  rather than adding a constructor parameter ("Nothing else changes"); WAL not enabled (optional in the review,
+  changes the on-disk mode). `close()` is idempotent (sqlite3 close twice is a no-op); use after close raises
+  `sqlite3.ProgrammingError`.
 
 ## 10. As built
 

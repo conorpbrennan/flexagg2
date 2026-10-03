@@ -37,6 +37,10 @@
 - run/reports/S8-implementer-2.md
 - run/reports/S8-review-1.md
 - run/reports/S9-implementer-1.md
+- run/reports/S9-review-1.md
+- run/reports/S9b-implementer-1.md
+- run/reports/S9b-implementer-2.md
+- run/reports/S9b-review-1.md
 - run/tracker.md
 - server/__init__.py
 - server/requirements.txt
@@ -101,6 +105,19 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `c396cbf` — S9: views store over SQLite (Python module, no web code)
+  - .gitignore
+  - docs/activepivot-ui-plan.md
+  - pytest.ini
+  - run/reports/S8-review-1.md
+  - run/reports/S9-implementer-1.md
+  - run/tracker.md
+  - server/__init__.py
+  - server/requirements.txt
+  - server/tests/__init__.py
+  - server/tests/test_views_store.py
+  - server/views_store.py
 
 - 2026-10-03 `1e20da2` — S8: field list and filter pickers speak ActivePivot levels
   - docs/activepivot-ui-plan.md

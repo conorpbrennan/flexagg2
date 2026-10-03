@@ -1,0 +1,6 @@
+Reviewer: code-reviewer-deep, round 1. Verdict: FAIL. Critical 1, important 0, advisory 3.
+- Gate re-run: pytest 44; tsc -b 0; vitest 178; ruff clean. Red confirmed by mutation (HEAD's _tx: new test fails; HEAD's whole module: 3 fail / 41 pass; no-ROLLBACK mutant: 4 fail).
+- Held: KeyboardInterrupt inside the body (rolled back, in_tx False); COMMIT busy; SQLite auto-rollback case.
+CRITICAL 1: server/views_store.py:133-134 — `BEGIN IMMEDIATE` runs outside the try. A KeyboardInterrupt delivered just after BEGIN returns (e.g. during the busy wait) skips the rollback: reproduced (second connection holds BEGIN IMMEDIATE, timer interrupt_main at 0.1 s, other connection commits at 0.3 s, store.save -> KeyboardInterrupt, in_tx True, next save "cannot start a transaction within a transaction"). Main-thread callers only; not S10's threadpool. Meets the step's own FAIL criterion. Fix: BEGIN as the first line inside the try (the in_transaction check already handles a failed BEGIN); verified: probe gives in_tx False, 44 tests pass.
+ADVISORY: failing ROLLBACK leaves the connection in a transaction (fake connection only; close the connection on ROLLBACK failure, or comment); new test should close the reader in try/finally; S9b block did not say BEGIN must be inside the try.
+TDD_GATE: FAIL

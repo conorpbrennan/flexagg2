@@ -1,6 +1,8 @@
 """Tests for server/views_store.py: the saved-view repository over SQLite."""
 
+import _thread
 import sqlite3
+import threading
 from pathlib import Path
 
 import pytest
@@ -312,3 +314,95 @@ def test_all_sql_is_parameterised(store):
     store.rename_folder("Public", nasty, "y' OR '1'='1")
     assert len(store.tree("Public")["views"]) == 1
     assert "y' OR '1'='1" in store.tree("Public")["folders"]
+
+
+def test_failed_commit_leaves_no_open_transaction(store):
+    store.save("Public", "", "keep", STATE)
+    store._conn.execute("PRAGMA busy_timeout=50")  # short wait, not the 5 s default
+    reader = sqlite3.connect(store.db_path, isolation_level=None)
+    try:
+        reader.execute("BEGIN")
+        # a read inside BEGIN holds a shared lock, so the store's COMMIT cannot finish
+        reader.execute("SELECT * FROM views").fetchall()
+        with pytest.raises(sqlite3.OperationalError):
+            store.save("Public", "", "doomed", STATE)
+        assert not store._conn.in_transaction
+        assert [v["slug"] for v in store.tree("Public")["views"]] == ["keep"]
+    finally:
+        reader.close()
+    store.save("Public", "", "after", STATE)
+    assert sorted(v["slug"] for v in store.tree("Public")["views"]) == ["after", "keep"]
+
+
+def test_interrupt_right_after_begin_leaves_no_open_transaction(store):
+    # The interrupt lands while BEGIN IMMEDIATE waits on another writer; Python delivers it as
+    # soon as BEGIN returns, so BEGIN must already be inside the try that rolls back.
+    store._conn.execute("PRAGMA busy_timeout=3000")
+    other = sqlite3.connect(
+        store.db_path, isolation_level=None, check_same_thread=False
+    )
+    other.execute("BEGIN IMMEDIATE")
+    timers = [
+        threading.Timer(0.1, _thread.interrupt_main),
+        threading.Timer(0.3, lambda: other.execute("COMMIT")),
+    ]
+    try:
+        for t in timers:
+            t.start()
+        with pytest.raises(KeyboardInterrupt):
+            store.save("Public", "", "interrupted", STATE)
+        assert not store._conn.in_transaction
+    finally:
+        for t in timers:
+            t.join()
+        other.close()
+    store.save("Public", "", "after", STATE)
+    assert [v["slug"] for v in store.tree("Public")["views"]] == ["after"]
+
+
+class _RollbackFails:
+    """Stands in for the connection: every statement works except ROLLBACK."""
+
+    def __init__(self, real):
+        self._real = real
+        self.closed = False
+
+    @property
+    def in_transaction(self):
+        return self._real.in_transaction
+
+    def execute(self, sql, *args):
+        if sql == "ROLLBACK":
+            raise sqlite3.OperationalError("disk I/O error")
+        return self._real.execute(sql, *args)
+
+    def close(self):
+        self.closed = True
+        self._real.close()
+
+
+def test_failed_rollback_closes_connection_and_keeps_original_chained(store):
+    fake = _RollbackFails(store._conn)
+    store._conn = fake
+    with (
+        pytest.raises(sqlite3.OperationalError, match="disk I/O") as info,
+        store._tx(),
+    ):
+        raise ValueError("body failed")
+    assert isinstance(info.value.__context__, ValueError)
+    assert fake.closed
+    with pytest.raises(sqlite3.ProgrammingError):
+        store.save("Public", "", "x", STATE)
+
+
+def test_context_manager_closes_connection(tmp_path):
+    with ViewsStore(tmp_path / "v.db") as s:
+        s.save("Public", "", "v", STATE)
+    with pytest.raises(sqlite3.ProgrammingError):
+        s.tree("Public")
+
+
+def test_close_is_idempotent(tmp_path):
+    s = ViewsStore(tmp_path / "v.db")
+    s.close()
+    s.close()

@@ -22,6 +22,7 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Self
 
 SECTIONS = ("Public", "Private")
 SCHEMA_VERSION = 2  # level keys in state, not risk_api names
@@ -129,13 +130,32 @@ class ViewsStore:
     def _tx(self) -> Iterator[sqlite3.Connection]:
         """One transaction: everything inside commits together or not at all."""
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                # Inside the try: an interrupt delivered just after BEGIN returns must still roll back.
+                self._conn.execute("BEGIN IMMEDIATE")
                 yield self._conn
+                self._conn.execute("COMMIT")
             except BaseException:
-                self._conn.execute("ROLLBACK")
+                if self._conn.in_transaction:
+                    try:
+                        self._conn.execute("ROLLBACK")
+                    except BaseException:
+                        # Cannot leave the transaction: fail loudly, not wedged. The original
+                        # error stays chained as __context__.
+                        self._conn.close()
+                        raise
                 raise
-            self._conn.execute("COMMIT")
+
+    def close(self) -> None:
+        """Close the connection; safe to call twice."""
+        with self._lock:
+            self._conn.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     # ------------------------------------------------------------------ helpers
     @staticmethod

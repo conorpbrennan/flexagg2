@@ -1,6 +1,6 @@
 # Plan — flexagg2++: a React/Vite pivot explorer on native ActivePivot
 
-Status: DRAFT, revision 1 (2026-10-03). Branch `activepivot-explorer`.
+Status: READY at cap, revision 4 (2026-10-03). Branch `activepivot-explorer`.
 Built from barra_poc's Vite UI (barra_poc `frontend/` at sha 442d2bc), not the Streamlit app.
 
 ## 1. What this delivers, and what it does not
@@ -75,16 +75,16 @@ standing set):
 | Cellset → `PivotResult` | `src/ap/cellset.ts` (S5) |
 | Safety rules | `src/ap/guards.ts` (S6) |
 | One pivot level fetch (guards + MDX + adapter) | `src/ap/pivotSource.ts` (S7) |
-| Context bar field → level | `src/ap/bindings.ts` (S8) |
+| Context bar field → level | `src/ap/bindings.ts` (S7) |
 | Number formatting / RAG colours | `src/lib/format.ts` |
-| Saved-view storage | `server/views_store.py` (S10) |
+| Saved-view storage | `server/views_store.py` (S9) |
 
 Found by reading the seed: `client.ts` is the only `fetch` wrapper, `format.ts` the only formatter, and
 `usePivot.ts` the only place a `/pivot` call is built.
 
 **Live facts (probed 2026-10-03; quote them, do not re-derive).**
 
-- ActivePivot 6.1.20 (Atoti 0.9.15) on `127.0.0.1:9095`. REST `activeviam/pivot/rest/v9`. One catalog
+- ActivePivot 6.1.20 (Atoti 0.9.15) on `127.0.0.1:9095`. REST root /activeviam/pivot/rest/v9. One catalog
   `atoti`, one cube `Exposures`: 17 hierarchies, 175 measures, 86 visible.
 - Hierarchies the context bar needs: `[Positions].[Manager].[Manager]`, `[Exposures].[Date].[Date]`,
   `[Scenarios].[ScenarioSet].[ScenarioSet]`, `[Units].[Units].[Units]` (slicing, members `$`/`Base`).
@@ -120,10 +120,11 @@ cell values in fixtures are made up.
 
 **Defaults taken without asking (owner may overturn before dispatch):**
 
-- Base path stays `/flexagg2++/`, set from env `VITE_BASE`. barra_poc's Vite UI is already served there,
-  so a production deploy must pick one. This only matters at deploy, which is out of scope.
-- Dev port 5174 (barra_poc's dev server holds 5173). Views service on `127.0.0.1:8020`.
-- Views store: FastAPI + SQLite (`data/views.db`, gitignored), its own `.venv`. That's the house stack,
+- **Owner amendment (2026-10-03, after round 2): dev port 5175, served at `/`.** No `/flexagg2++/` prefix
+  anywhere, so nothing collides with barra_poc's deploy. Same-origin paths are `/api` (risk_api),
+  `/ap` (ActivePivot) and `/views-api` (views store). No `VITE_BASE` variable.
+- Views service on `127.0.0.1:8020`.
+- Views store: FastAPI + SQLite (data/views.db, gitignored), its own `.venv`. That's the house stack,
   and SQLite means moves and renames are transactions, not file juggling.
 
 ## 4. Prerequisites and ordering
@@ -143,12 +144,13 @@ S12 docs. S2–S6 are pure modules with disjoint files; S7 is the first step tha
 S10 touch only `server/`, so they could overlap S7–S8 under §7a, but run them in order: one implementer
 at a time.
 
-**Target.** No frozen output to match. What plays that role: the seed's 63 passing tests (15 files) at S1,
+**Target.** No frozen output to match. What plays that role: the trimmed seed's 42 passing tests (11 files) at S1,
 and the fixture-driven suites S3–S6 add. Behaviour that must survive is pinned by the seed's existing
 `usePivot`, `PivotGrid`, `ChartMode` and `Pivot` tests, which S7 changes only where the transport changes.
 
 **Suite baseline.** At barra_poc 442d2bc: `npx vitest run` → 15 files, 63 tests, all passing. Nothing red
-at the start. S1's GATE re-measures it here after the trim.
+at the start. After S1's trim the suite is 11 files / 42 tests (the 21 dropped tests belong to the removed
+routes; measured by round 1 on a scratch copy).
 
 ## 5. The steps
 
@@ -176,7 +178,12 @@ WHAT TO BUILD:
 - Then the only edits: `App.tsx` routes `/` → `<Navigate to="/pivot">`, `/pivot` → Pivot, `*` → `/pivot`;
   remove the other route imports. `LeftRail.tsx` keeps only the Pivot entry. `package.json` `name` →
   `flexagg2pp-ap-explorer`, `description` → one line saying it is the ActivePivot explorer.
-  `vite.config.ts`: `base: process.env.VITE_BASE ?? "/flexagg2++/"`, dev `port: 5174`.
+  `vite.config.ts`: `export default defineConfig(({ mode }) => { const env = loadEnv(mode, ".", ""); … })`
+  with `base: "/"`, dev `port: 5175`, `strictPort: true`. Not `process.env`: there is no `@types/node`,
+  and `loadEnv` with prefix `""` also reads shell env vars (verified in round 1). The risk_api proxy key
+  becomes `/api` (prefix `/api` stripped, `x-accel-buffering` hook kept).
+- Drop the `/flexagg2++` prefix (§3 owner amendment): `src/api/client.ts` `API_BASE = "/api"`;
+  `src/main.tsx` `BrowserRouter` loses its `basename`; `index.html` title → `ActivePivot explorer`.
 - `hooks.ts` keeps only the hooks that the copied files import; delete the rest. `types.ts` likewise.
   Deleting is the only change to them.
 - If a kept file imports something not on the list, STOP-AND-REPORT; do not copy more.
@@ -187,7 +194,8 @@ MUST NOT TOUCH: `src/ap/` (S2–S8), `server/` (S9–S10).
 TESTS FIRST: exempt in substance (a copy with its own tests). Copy the test files before the source files
 so the edit order holds.
 GATE: `npm ci` exits 0 and `npx tsc -b` exits 0 and `npx vitest run` exits 0 and `npx vite build` exits 0
-and `git ls-files src/routes` lists exactly `Pivot.tsx`, `Pivot.test.tsx`, `Pivot.rejection.test.tsx`.
+and `npx vitest run` reports 11 files / 42 tests passed and `git ls-files src/routes` lists exactly
+`Pivot.tsx`, `Pivot.test.tsx`, `Pivot.rejection.test.tsx`.
 REVIEW:
 1. Does any copied file differ from barra_poc at 442d2bc beyond the edits listed in WHAT TO BUILD?
    (`diff` each against `git -C /home/abrennan/dev/barra_poc show 442d2bc:frontend/<path>`.)
@@ -202,16 +210,17 @@ it does not read.
 NEW `src/ap/client.ts`, `src/ap/client.test.ts`. EXTEND `vite.config.ts`.
 
 WHAT TO BUILD:
-- `AP_BASE = (import.meta.env.BASE_URL ?? "/flexagg2++/") + "ap"`; REST root
+- `AP_BASE = "/ap"`; REST root
   `${AP_BASE}/activeviam/pivot/rest/v9`.
-- `class ApError extends Error { status: number; chain: string[] }`, message = first `errorChain` message
+- `class ApError extends Error { status: number; chain: string[] }` with
+  `constructor(status: number, message: string, chain: string[] = [message])`. From a response, message = first `errorChain` message
   with the leading `[400] ` and any Java class prefix up to the last `: ` removed; `chain` keeps them all.
   Non-JSON error body → message `HTTP <status>`.
 - `apDiscovery(): Promise<RawDiscovery>` = GET `/cube/discovery`, unwraps `data` if present.
 - `apMdx(mdx: string, opts?: {timeLimitS?: number; signal?: AbortSignal}): Promise<RawCellSet>` = POST
   `/cube/query/mdx` body `{mdx, context: {queriesTimeLimit: String(timeLimitS ?? 30)}}`, unwraps `data`.
 - `RawDiscovery`, `RawCellSet` types: exactly the fields in §2 "Live facts", nothing speculative.
-- `vite.config.ts`: add proxy `${base}ap` → `process.env.AP_TARGET ?? "http://127.0.0.1:9095"`, prefix
+- `vite.config.ts`: add proxy `/ap` → `env.AP_TARGET || "http://127.0.0.1:9095"` (S1's `loadEnv`), prefix
   stripped, `changeOrigin: true`. The existing `/api` proxy is unchanged.
 IMPORTS: none (this is the owner).
 ASSUMES LANDED: S1.
@@ -221,7 +230,8 @@ TESTS FIRST: `src/ap/client.test.ts` with mocked `fetch`: URL and body of `apMdx
 `HTTP 500`. Red because `src/ap/client.ts` does not exist.
 GATE: §2 standard checks.
 REVIEW:
-1. Is the proxy prefix built from the same base as the app (so a changed `VITE_BASE` moves both)?
+1. Does the `/ap` proxy strip exactly the prefix `AP_BASE` adds, so `/ap/activeviam/...` reaches
+   `/activeviam/...` on :9095?
 2. Can an aborted request surface as an unhandled rejection?
 3. Does the error trimming ever drop the whole message (empty string)?
 FAIL if: any `fetch` outside `src/ap/client.ts` targets ActivePivot; a type field not in §2's live facts.
@@ -240,7 +250,8 @@ WHAT TO BUILD:
   `]` escaped as `]]` inside each part, and `parseLevelKey` as its exact inverse.
 - `interface CubeModel { cube: string; levels: LevelInfo[]; measures: MeasureInfo[]; slicing: string[] }`.
   `LevelInfo = LevelRef & { key; caption; depth; slicing: boolean }`. Leaves out `ALL` levels and the
-  `Epoch` dimension. `MeasureInfo = { name; caption; formatString; visible }`.
+  `Epoch` dimension. `CubeModel.slicing` = the level keys of slicing hierarchies (no `ALL` level: Units,
+  StressShock, CorrStress, ScenarioDay on this cube); their single level has depth 1. `MeasureInfo = { name; caption; formatString; visible }`.
 - `toCubeModel(raw: RawDiscovery, cube = "Exposures"): CubeModel`. If the cube is not found, throw
   `Error("cube <name> not in discovery")`.
 - `useCubeModel()`: TanStack Query, key `["ap","discovery"]`, `staleTime: Infinity`.
@@ -264,16 +275,30 @@ NEW `src/ap/mdx.ts`, `src/ap/mdx.test.ts`.
 
 WHAT TO BUILD:
 - `interface ApQuery { cube: string; rows: string[]; cols: string[]; measures: string[];
-  filters: Record<string, string[]>; nonEmpty: boolean }`. Row/col/filter keys are level keys (S3).
-- `memberKey(levelKey, name) = levelKey + ".[" + esc(name) + "]"` and `measureKey(name)` =
+  filters: Record<string, string[]>; nonEmpty: boolean; slicing: string[] }`. Row/col/filter keys are
+  level keys (S3); `slicing` is `CubeModel.slicing`, passed through by the caller.
+- **Member identity is the full path, never a bare name.** A member value in a filter or a record is a
+  *path string*: the member's `namePath` below `AllMember`, joined with `\u241E` (`pathKey(parts)` /
+  `splitPath(s)` live here). `memberKey(levelKey, path, slicing)` writes
+  `[d].[h].[ALL].[AllMember].[p1]…[pn]`, each part through `esc`; for a level in `slicing` it writes
+  `[d].[h].[level].[p1]` instead (the `ALL` form is a 400 there, the short form works — checked live). Why: on this cube
+  `[Securities].[Security].[Sector].[Energy]` silently resolves to the first Energy (one country's),
+  which gives wrong numbers with no error (round 1, checked live). `measureKey(name)` =
   `[Measures].[esc(name)]`, `esc` doubling `]`.
+- **One set per hierarchy on an axis.** If `rows` (or `cols`) names several levels of one hierarchy,
+  only the deepest goes on the axis (`<deepest>.Members`); the shallower ones are filled from the
+  position's `namePath` by S5. Why: `CrossJoin` of two levels of one hierarchy is a 400 (checked live), and
+  the drill sends exactly that (Country→Sector).
 - `buildMdx(q): string`:
   - COLUMNS = `{measures}` crossed with `cols` level members if `cols` is non-empty.
     ROWS = crossjoin of `<level>.Members` for each row level; omitted when `rows` is empty (grand total).
     `NON EMPTY` on both axes when `q.nonEmpty`.
-  - Filters: a level with one member goes into `WHERE` as a tuple. A level with several members becomes a
-    sub-select, `FROM (SELECT {m1, m2} ON COLUMNS FROM [cube])`, nested once per such level.
-    Never both a WHERE and a sub-select on the same hierarchy.
+  - Filters: a single-member filter on a hierarchy **not** on any axis goes into `WHERE` as a tuple.
+    Every other filter (several members, or its hierarchy is on an axis) becomes a sub-select,
+    `FROM (SELECT {m1, m2} ON COLUMNS FROM [cube])`, nested once per filtered hierarchy. Why: a WHERE on
+    a hierarchy that is also on an axis is a 400 (checked live) — e.g. the context Date with Date on rows,
+    or a drill parent with the child level on the axis. Never both a WHERE and a sub-select on one
+    hierarchy.
   - Empty `measures` → throw `Error("select at least one measure")`.
 - No string from the user reaches the output except through `esc`.
 IMPORTS: `src/ap/discovery.ts` (`levelKey`, `parseLevelKey`).
@@ -281,7 +306,10 @@ ASSUMES LANDED: S3.
 MUST NOT TOUCH: `src/ap/cellset.ts` (S5).
 TESTS FIRST: `mdx.test.ts`: exact strings for (a) one row level + two measures, (b) two row levels
 (crossjoin), (c) one col level, (d) single-member filter → WHERE, (e) two-member filter → sub-select,
-(f) a member named `a]b` comes out as `[a]]b]`, (g) no rows → no ROWS axis, (h) empty measures throws.
+(f) a member named `a]b` comes out as `[a]]b]`, (g) no rows → no ROWS axis, (h) empty measures throws,
+(i) a Sector member is written with its full Country path, (j) rows Country+Sector put only
+`[Securities].[Security].[Sector].Members` on the axis, (k) a Date filter with Date on rows becomes a
+sub-select, not WHERE, (l) a Units `$` filter (Units in `slicing`) is written `[Units].[Units].[Units].[$]`.
 Red: module absent.
 GATE: §2 standard checks.
 REVIEW (deep tier):
@@ -299,63 +327,73 @@ NEW `src/ap/cellset.ts`, `src/ap/cellset.test.ts`, `src/ap/__fixtures__/cellset-
 `src/ap/__fixtures__/cellset-rows-cols.json`.
 
 WHAT TO BUILD:
-- `cellsetToRecords(cs: RawCellSet, q: ApQuery): Rec[]`: one record per (row position × col position),
-  with keys = the risk-style short level name (`level`, e.g. `Factor`) for each row/col level, plus one
-  key per measure name. Member value = last `captionPath` entry. Missing ordinal → `null`.
-  Column count = `axes[id 0].positions.length`.
+- `cellsetToRecords(cs: RawCellSet, q: ApQuery): Rec[]`: one record per (row position × col position).
+  Keys: **each level key exactly as given in `q.rows`/`q.cols`** (that is what `usePivot`'s
+  `rowsFromRecords` reads as `rec[dim]`), plus one key per measure name. The value under a level key is
+  the S4 path string for that level (taken from the position's `namePath` with a leading `AllMember`
+  dropped only when present — slicing hierarchies have none — cut at that level's depth, so a shallower
+  level of the same hierarchy is filled too). The display caption goes under
+  `labelKey(levelKey)` = `levelKey + "#label"` (last `captionPath` entry at that depth). Missing
+  ordinal → `null`. Column count = `axes[id 0].positions.length`.
 - `toPivotResult(parts: {body: RawCellSet; perRow?: RawCellSet; perCol?: RawCellSet; grand?: RawCellSet},
   q): PivotResult` fills `records`, `per_row`, `per_col`, `grand` exactly as `src/api/types.ts`
   `PivotResult` defines them. `warning: null` (S6 owns warnings).
-- If two levels in one query share a short name, prefix with the hierarchy (`Date` vs `ScenarioDays.Day`);
-  test it.
 - Fixtures are hand-written in the live shape (§2), with made-up values.
 IMPORTS: `src/ap/client.ts` (`RawCellSet`), `src/ap/mdx.ts` (`ApQuery`), `src/api/types.ts`
 (`PivotResult`, `Rec`).
 ASSUMES LANDED: S4.
 MUST NOT TOUCH: `src/pivot/usePivot.ts` (S7).
 TESTS FIRST: `cellset.test.ts`: rows-only fixture gives the right records; rows×cols fixture maps ordinal
-`c + r*nCols` correctly; a sparse cell is `null`; short-name collision is prefixed; `grand` is a single
-record of measures. Red: module absent.
+`c + r*nCols` correctly; a sparse cell is `null`; two Sector members with the same caption under different
+countries get different path values; `grand` is a single record of measures. Red: module absent.
 GATE: §2 standard checks.
 REVIEW:
 1. Is there any sum, average, or fill of a missing value? (VaR is non-additive: there must be none.)
 2. Does the ordinal arithmetic hold when the column axis has more than one hierarchy?
-3. Do the record keys match what `PivotGrid.tsx` and `ChartMode.tsx` read, without changing either?
+3. Do the record keys match what `PivotGrid.tsx` and `ChartMode.tsx` read from records, without changing
+   what they read? (Header captions are S7's job.)
 FAIL if: any arithmetic on cell values; a change to `src/api/types.ts`.
 ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: 25 min; 1 round.
 
 **S6. barra's pivot safety rules run in the browser before any MDX is sent.**
 NEW `src/ap/guards.ts`, `src/ap/guards.test.ts`. EXTEND `src/api/types.ts` (add
-`price_dependent?: string[]` to `Dims`; risk_api already returns it).
+`price_dependent?: string[]` and `dollar_measures?: string[]` to `Dims`; risk_api already returns both).
 
 WHAT TO BUILD:
 - `interface GuardRules { scenarioDependent: Set<string>; dayDependent: Set<string>;
-  priceDependent: Set<string>; managerIndependent: Set<string>; multiManager: boolean;
-  latestDate: string | null }`.
+  priceDependent: Set<string>; managerIndependent: Set<string>; dollarMeasures: string[];
+  multiManager: boolean; latestDate: string | null }`.
 - `rulesFromDims(dims: Dims, managers: number): GuardRules`. Lists come from risk_api `/dims`
   (`scenario_dependent`, `day_dependent`, `price_dependent`). `managerIndependent` is the constant
   `["Factor contribution","Specific PnL","Realized PnL"]`, with a comment naming barra_poc
   `risk_api.py` `MANAGER_INDEPENDENT_MEASURES` as its source. `latestDate` = last of `dims.dates`.
 - `checkQuery(q: ApQuery, rules, bind: Bindings): {ok: true; q: ApQuery; notice: string | null} |
   {ok: false; error: string}`. Rules, in order:
-  1. a manager-independent measure with `multiManager` → error (same wording idea as risk_api's 400);
+  1. a manager-independent measure with `multiManager` → error (same wording idea as risk_api's 400).
+     `multiManager` = more than one manager loaded in the cube (`/meta` `managers` length), not
+     "more than one selected": risk_api refuses these three on every multi-manager query, filtered or
+     not, because the baked column reads one arbitrary manager's numbers under any label;
   2. a scenario-dependent measure and the ScenarioSet level not filtered to exactly one member and not on
      an axis → error "pick one scenario set";
   3. a scenario/day/price-dependent measure, Manager on an axis, Date neither on an axis nor filtered →
      add the `latestDate` filter, `notice` says so (risk_api's 60 s pathology).
-- `Bindings` is a stub type here (`{manager; date; scenarioSet; units}` level keys); S8 owns real values.
-  The test passes literal keys.
+  4. a day-dependent measure with no DaySet filter, or a price-dependent measure with no PriceSet filter →
+     `notice` (risk_api's `_pivot_result` warns on both; on this cube both hierarchies have an `ALL`
+     level, so the MDX path has the same gap).
+  Rule 2 is an error where risk_api only warns. That is deliberate: a null column is worse than a refusal.
+- `Bindings` (`{manager; date; scenarioSet; units}` level keys) is defined here and stays here; S7's
+  `BINDINGS` is typed `Bindings`. The test passes literal keys.
 - `useGuardRules()` hook reading `useDims` + `useMeta` from `src/api/hooks.ts`.
 IMPORTS: `src/api/hooks.ts` (`useDims`, `useMeta`), `src/api/types.ts` (`Dims`), `src/ap/mdx.ts` (`ApQuery`).
 ASSUMES LANDED: S4.
-MUST NOT TOUCH: `src/ap/bindings.ts` (S8).
+MUST NOT TOUCH: `src/ap/bindings.ts` (S7).
 TESTS FIRST: `guards.test.ts`: one case per rule firing, one per rule not firing, and rule order (1 wins
 over 2). Red: module absent.
 GATE: §2 standard checks.
 REVIEW:
 1. Does each rule match its risk_api counterpart (`_validate_pivot`, the ScenarioSet `warning`,
-   `_needs_date_default`)? Read barra_poc `python_src/risk_api.py` to answer.
+   `_needs_date_default`)? Read /home/abrennan/dev/barra_poc/python_src/risk_api.py to answer.
 2. Is the guard pure (no fetch, no hook) apart from `useGuardRules`?
 3. When `/dims` has not loaded, does the pivot wait, or run unguarded? It must wait.
 FAIL if: a rule is weaker than its risk_api counterpart; the list of three measures is spelled
@@ -364,75 +402,103 @@ ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: 20 min; 1 round.
 
 **S7. The pivot grid and chart mode run on ActivePivot instead of risk_api `/pivot`.**
-NEW `src/ap/pivotSource.ts`, `src/ap/pivotSource.test.ts`. EXTEND `src/pivot/usePivot.ts`,
-`src/pivot/usePivot.test.ts`, `src/pivot/ChartMode.tsx`, `src/pivot/ChartMode.test.tsx`,
-`src/routes/Pivot.test.tsx`, `src/routes/Pivot.rejection.test.tsx`.
+NEW `src/ap/pivotSource.ts`, `src/ap/pivotSource.test.ts`, `src/ap/bindings.ts`, `src/ap/bindings.test.ts`.
+EXTEND `src/pivot/usePivot.ts`, `src/pivot/usePivot.test.ts`, `src/pivot/ChartMode.tsx`,
+`src/pivot/ChartMode.test.tsx`, `src/pivot/PivotGrid.tsx`, `src/pivot/PivotGrid.test.ts`,
+`src/routes/Pivot.tsx`, `src/routes/Pivot.test.tsx`, `src/routes/Pivot.rejection.test.tsx`.
 
 WHAT TO BUILD:
 - `fetchPivotLevel(args: {cube; rows; cols; measures; filters; totals; rowTot}, rules, bind,
   signal?): Promise<PivotResult>`: `checkQuery` → if not ok, throw `ApError(400, error)` so the existing
   rejection UI shows it. Then one MDX for the body, and when totals are asked, separate MDX for `per_row`
   (rows only), `per_col` (cols only) and `grand` (no rows), in parallel. Notice → `PivotResult.warning`.
-- `usePivot.ts` `queryLevel` calls `fetchPivotLevel` instead of `apiGet("/pivot")`. Drill, sort, hide-empty,
-  splice and every other behaviour stay as they are. Row/col/filter values are now level keys.
-- Units: `cfg.units === "dollar"` becomes a filter `[Units].[Units].[Units]` = `$`; `weight` adds nothing.
+- `usePivot.ts`: both `/pivot` call sites (`queryLevel` and the one in `reload`) call `fetchPivotLevel`.
+  Drill, sort, hide-empty, splice and every other behaviour stay as they are. Row/col/filter keys are now
+  level keys and member values S4 path strings; `DisplayRow.label` shows `rec[labelKey(dim)]`. Every
+  `buildMdx` call passes `slicing: model.slicing`.
+- `PivotGrid.tsx` gains an optional `captions: Record<string, string>` prop (level key → discovery
+  caption, column-member path → its `#label`), filled by `usePivot`. The label-column header and the
+  `<col member> · <measure>` headers use it, so no header shows a bracketed key or a `\u241E` path.
+  Sort column ids are unchanged.
+- `bindings.ts` (moved here from S8 so the context fold has an owner): `BINDINGS = { manager:
+  "[Positions].[Manager].[Manager]", date: "[Exposures].[Date].[Date]", scenarioSet:
+  "[Scenarios].[ScenarioSet].[ScenarioSet]", units: "[Units].[Units].[Units]" }`;
+  `checkBindings(model: CubeModel): string[]` returns the keys missing from the model;
+  `contextFilters(ctx: {manager; date; scenario}): Record<string,string[]>` turns AppContext's
+  context into level-key filters, an empty value adding nothing. Every value is a one-part path.
+- `Pivot.tsx`: merged filters = `contextFilters(ctx)` overlaid by the user's own (user wins on the same
+  level). Remove the what-if bar (`useWhatif`, `HypoBar`, `cfg.whatif`/`shocks`) and the `/analysis`
+  StreamPanel (§1). Replace the hard-coded short names (default `rows`, the `Date`/`ScenarioSet`
+  filters, the `onAxis` check) with `BINDINGS` keys; the default row field is `bindings.ts`
+  `DEFAULT_ROWS = ["[FactorMeta].[FactorDim].[FactorGroup]"]`.
+- No query runs until the guard rules have loaded (`useGuardRules()` defined → TanStack `enabled`). A
+  pivot never runs unguarded.
+- `nonEmpty` is always `true` (risk_api's `/pivot` never returned empty rows either); the existing
+  hide-empty toggle keeps its current client-side meaning.
+- Units: `cfg.units === "dollar"` becomes a filter `BINDINGS.units` = `$`; `weight` adds nothing. When it is
+  `$`, the result carries `units: "dollar"` and `dollar_measures` = the requested measures that are in
+  `rules.dollarMeasures`, so PivotGrid's money formatting still works.
 - Remove the `whatif`/`shocks` fields from `PivotConfig` and `hypoParams` (§1: not in this plan).
   Delete only the tests that exercise them. Name each deleted test in the report.
-- `ChartMode.tsx` fetches each named query through `fetchPivotLevel` with no drill.
+- `ChartMode.tsx` fetches each named query through `fetchPivotLevel` with no drill. Vega-Lite reads `.` and
+  `[` in a field name as nested access, so the chart's records are re-keyed to plain aliases (`f0`, `f1`…)
+  with the level's caption as the axis title.
 IMPORTS: `src/ap/pivotSource.ts` imports `src/ap/client.ts`, `src/ap/mdx.ts`, `src/ap/cellset.ts`,
 `src/ap/guards.ts`. Nothing else may call `apMdx`.
 ASSUMES LANDED: S5, S6.
-MUST NOT TOUCH: `src/pivot/FieldList.tsx`, `src/routes/Pivot.tsx`, `src/shell/ContextBar.tsx` (S8).
-TESTS FIRST: `pivotSource.test.ts` (mock `apMdx`): guard error → `ApError` 400 with no MDX sent; totals
-issue 4 MDX calls, no totals issue 1; a notice ends up in `warning`. Then update `usePivot.test.ts` so its
+MUST NOT TOUCH: `src/pivot/FieldList.tsx` (S8), `src/shell/ContextBar.tsx`.
+TESTS FIRST: `bindings.test.ts`: `checkBindings` against the S3 fixture returns `[]`, and against a copy
+missing Units returns `["units"]`; `contextFilters` drops empties. `pivotSource.test.ts` (mock `apMdx`):
+guard error → `ApError` 400 with no MDX sent; totals issue 4 MDX calls, no totals issue 1; a notice ends
+up in `warning`; Units `$` sets `dollar_measures`. Then update `usePivot.test.ts` so its
 mock is `fetchPivotLevel`, not `apiGet`. Red: `pivotSource.ts` absent, and `usePivot.test.ts` expects
 the new mock.
-GATE: §2 standard checks and `grep -rn '"/pivot"' src` prints nothing.
+GATE: §2 standard checks and `grep -rn '"/pivot"' src/api src/ap src/pivot` prints nothing (the router's
+own `"/pivot"` route in `App.tsx`/`LeftRail.tsx` is not an API call).
 Optional live smoke (report the result, it does not block): with :9095 up, `npx vite` and load
-`/flexagg2++/pivot`, rows Factor level, measure Net exposure, one manager + date; the grid fills.
+`http://localhost:5175/pivot`, rows Factor level, measure Net exposure, one manager + date; the grid fills.
 REVIEW:
 1. Are the margins still cube-computed, separate queries? Is any total summed in the browser?
 2. Do the drill tests still prove expand → one query for the next level, filtered to the parent path?
-3. Is each test deletion only for the removed what-if/shocks path?
+3. Is each test deletion only for the removed what-if/shocks path or the removed `/analysis` panel?
+4. Is `BINDINGS` the only place those four level keys are written?
 FAIL if: a client-side sum; a test deleted that is not about what-if/shocks; `apMdx` called outside
 `pivotSource.ts`.
 ROLLBACK: a single `git revert` of this step's commit. S8 depends on it; revert S8 first.
 BUDGET: 30 min; 1–2 rounds. The biggest behaviour change in the plan.
 
-**S8. The context bar and the field list speak ActivePivot levels.**
-NEW `src/ap/bindings.ts`, `src/ap/bindings.test.ts`, `src/pivot/FieldList.test.tsx`. EXTEND
-`src/pivot/FieldList.tsx`, `src/routes/Pivot.tsx`, `src/routes/Pivot.test.tsx`.
+**S8. The field list and its filter pickers speak ActivePivot levels.**
+NEW `src/pivot/FieldList.test.tsx`. EXTEND `src/pivot/FieldList.tsx`, `src/ap/pivotSource.ts`,
+`src/ap/pivotSource.test.ts`, `src/routes/Pivot.tsx`.
 
 WHAT TO BUILD:
-- `bindings.ts`: `BINDINGS = { manager: "[Positions].[Manager].[Manager]", date: "[Exposures].[Date].[Date]",
-  scenarioSet: "[Scenarios].[ScenarioSet].[ScenarioSet]", units: "[Units].[Units].[Units]" }`.
-  `checkBindings(model: CubeModel): string[]` returns the keys missing from the model.
-  `contextFilters(ctx: {manager; date; set}): Record<string,string[]>` turns the global context into
-  level-key filters. A context value that is empty adds nothing.
-- `Pivot.tsx`: the merged filters are `contextFilters(ctx)` overlaid by the user's own filters (user wins
-  on the same level). If `checkBindings` is non-empty, show one line naming the missing levels; the
-  pivot still works without the context.
+- `pivotSource.ts` gains `fetchMembers(levelKey): Promise<{path: string; label: string}[]>`: the MDX is
+  `buildMdx({cube, rows: [levelKey], cols: [], measures: ["contributors.COUNT"], filters: {},
+  nonEmpty: true, slicing: model.slicing})` (no MDX text written here, §6), sent with `apMdx`, mapped with `cellsetToRecords` to
+  `{path: rec[levelKey], label: rec[labelKey(levelKey)]}`. Cached per level with TanStack Query. `FieldList`'s filter picker reads members from it instead of `dims.members[dim]`.
+- Delete `FieldList`'s two amber warnings (`scenCtx`, `dayCtx`, keyed on `"ScenarioSet"`/`"DaySet"`):
+  S6's guards own those rules and surface them through `warning` and the rejection line.
+- `Pivot.tsx`: if `checkBindings` (S7) is non-empty, show one line naming the missing levels; the pivot
+  still works without the context.
 - `FieldList.tsx`: sources come from `useCubeModel()`. Dimensions grouped by dimension → hierarchy →
   levels in depth order, captions shown. Measures: visible only, alphabetical, with a text filter box.
   Drag and drop zones are unchanged. Field ids are level keys.
 - The context bar itself (`ContextBar.tsx`) is unchanged: it still reads risk_api `/meta`.
-IMPORTS: `src/ap/discovery.ts` (`useCubeModel`, `CubeModel`), `src/ap/guards.ts` (`Bindings` type now
-filled from here).
+IMPORTS: `src/ap/discovery.ts` (`useCubeModel`, `CubeModel`), `src/ap/bindings.ts` (`checkBindings`).
 ASSUMES LANDED: S7.
 MUST NOT TOUCH: `src/shell/ContextBar.tsx`, `src/context/AppContext.tsx`, `server/`.
-TESTS FIRST: `bindings.test.ts`: `checkBindings` against the S3 fixture returns `[]`, and against a copy
-missing Units returns `["units"]`; `contextFilters` drops empties. `FieldList.test.tsx`: renders the
-fixture's Securities levels in order; hidden measures absent; the text filter narrows the list. Red:
-modules absent.
+TESTS FIRST: `FieldList.test.tsx`: renders the fixture's Securities levels in order; hidden measures
+absent; the text filter narrows the list; the filter picker lists what a mocked `fetchMembers` returns.
+`pivotSource.test.ts`: `fetchMembers` sends one `.Members` MDX and maps path and label. Red: the new
+tests fail against S7's code.
 GATE: §2 standard checks.
 Optional live smoke (reported, not blocking): the field list shows 86 measures on the live cube.
 REVIEW:
-1. Does a user filter on Manager override the context bar's manager, as WHAT TO BUILD says?
+1. Can a filter picker ever offer a bare caption instead of a path (the Energy problem, S4)?
 2. With 86 measures, is the list usable without scrolling past chrome (filter box first, Tufte: no
    icons, no boxes)?
-3. Is `BINDINGS` the only place those four level keys are written?
 FAIL if: a level key written as a literal outside `bindings.ts` / fixtures / tests; any visual element
-added that does not encode data.
+added that does not encode data; `apMdx` called outside `pivotSource.ts`.
 ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: 30 min; 1–2 rounds.
 
@@ -455,7 +521,7 @@ WHAT TO BUILD:
   `rename_view`.
 - `file` (the client-facing id) = `<section>/<folder path>/<slug>`, same shape barra used.
 - Folder paths: segments joined by `/`. Reject empty segments, `.`, `..`, and any `\`. `slugify` follows
-  barra's `views_repo.slugify` rules; read barra_poc `python_src/views_repo.py` and match them.
+  barra's `views_repo.slugify` rules; read /home/abrennan/dev/barra_poc/python_src/views_repo.py and match them.
 - `schema_version` in every stored doc is `2` (level keys, not risk_api names).
 IMPORTS: stdlib `sqlite3` only.
 ASSUMES LANDED: S1 (for `.gitignore`); independent of S2–S8.
@@ -480,15 +546,16 @@ WHAT TO BUILD:
   GET `/views` → `{sections: {Public: tree, Private: tree}}`; GET `/views/item/{file:path}`;
   PUT `/views/save` `{name, folder, state}` → `{file}`; DELETE `/views/item/{file:path}`;
   POST `/views/move`, `/views/rename`, `/views/folder`, `/views/folder/rename`; DELETE
-  `/views/folder/{rel:path}`. Read barra_poc `python_src/views_api.py` for each body shape and copy it.
-- `ValueError` → 400, missing → 404, folder not empty → 409.
-- DB path from env `VIEWS_DB`, default `<repo>/data/views.db`, directory created on start.
+  `/views/folder/{rel:path}`. Read /home/abrennan/dev/barra_poc/python_src/views_api.py for each body shape and copy it.
+- Status codes and the section-prefixed `folder` (`"Public/Risk"`) follow barra's `views_api.py`; where
+  this plan and that file disagree, the file wins.
+- DB path from env `VIEWS_DB`, default views.db under the repo's data directory, created created on start.
 - Run: `.venv/bin/uvicorn server.views_api:app --host 127.0.0.1 --port 8020`.
 IMPORTS: `server/views_store.py` (`ViewsStore`).
 ASSUMES LANDED: S9.
 MUST NOT TOUCH: `src/`.
 TESTS FIRST: `test_views_api.py` with FastAPI `TestClient` over a tmp DB: each route's happy path, plus
-the 400/404/409 cases. Red: module absent.
+the error cases barra's `views_api.py` raises. Red: module absent.
 GATE: §2 standard checks.
 REVIEW:
 1. Does each route's request/response match barra's `views_api.py` exactly, so `src/api/views.ts`
@@ -499,22 +566,23 @@ ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: 20 min; 1 round.
 
 **S11. The Repository panel saves and loads views from the new store.**
-EXTEND `src/api/views.ts`, `src/api/types.ts`, `src/pivot/Repository.tsx`, `vite.config.ts`,
-`src/routes/Pivot.tsx`. NEW `src/api/views.test.ts`, `src/pivot/Repository.test.tsx`.
+NEW `src/api/views.test.ts`, `src/pivot/Repository.test.tsx`. EXTEND `src/api/views.ts`, `src/api/types.ts`,
+`src/pivot/Repository.tsx`, `vite.config.ts`, `src/routes/Pivot.tsx`.
 
 WHAT TO BUILD:
-- `vite.config.ts`: proxy `${base}views-api` → `process.env.VIEWS_TARGET ?? "http://127.0.0.1:8020"`,
+- `vite.config.ts`: proxy `/views-api` → `env.VIEWS_TARGET || "http://127.0.0.1:8020"` (S1's `loadEnv`),
   prefix stripped.
-- `views.ts` uses its own base `${BASE_URL}views-api` (same `apiGet`/`apiSend` helpers, given a base
+- `views.ts` uses its own base `/views-api` (same `apiGet`/`apiSend` helpers, given a base
   argument; add an optional `base` parameter to both in `src/api/client.ts` only if needed, and then list
   that file in a DECISIONS-OPEN entry).
 - `types.ts`: `ViewDoc.schema_version: 2`. Loading a doc whose `schema_version` is not 2 shows one line
   ("saved before ActivePivot fields; not loadable") and loads nothing.
-- `Repository.tsx`: section switch, folder tree, save/load/delete, new folder; behaviour as the seed.
+- `Repository.tsx`: section switch, folder tree, save/load/delete; behaviour as the seed (it has no
+  new-folder control, and none is added).
 IMPORTS: `src/api/client.ts`.
 ASSUMES LANDED: S8, S10.
 MUST NOT TOUCH: `server/`.
-TESTS FIRST: `views.test.ts` (mocked fetch): URLs go to `/flexagg2++/views-api/views…`.
+TESTS FIRST: `views.test.ts` (mocked fetch): URLs go to `/views-api/views…`, and no URL starts `/api/views`.
 `Repository.test.tsx`: a v1 doc is refused with the message; a v2 doc applies rows/cols/measures/filters
 to the pivot config. Red: new expectations fail against the seed.
 GATE: §2 standard checks.
@@ -532,13 +600,13 @@ NEW `README.md`, `docs/serving.md`.
 
 WHAT TO BUILD:
 - `README.md`: what it is (two sentences), the three processes to run (ActivePivot via barra_poc, risk_api
-  on :8010, views store on :8020) with exact commands, `npm run dev`, env vars (`VITE_BASE`, `AP_TARGET`,
+  on :8010, views store on :8020) with exact commands, `npm run dev` (port 5175), env vars (`AP_TARGET`,
   `VIEWS_TARGET`, `VIEWS_DB`), the invariants (grid is a renderer, guards before MDX), and the layout.
   Plain English, the owner's voice: short sentences, no filler.
-- `docs/serving.md`: the nginx locations a deploy would add (`/flexagg2++/`, `/flexagg2++/ap/`,
-  `/flexagg2++/api/`, `/flexagg2++/views-api/`, all behind basic auth), marked "not applied". Note that
-  the base path clashes with barra_poc's live deploy, and that :9095 answers anonymously as admin and
-  must not be exposed without the proxy.
+- `docs/serving.md`: what a deploy would need, marked "not applied": the app is built for `/`, so it gets
+  its own host or port (not a path under barra's site), with `/ap/`, `/api/` and `/views-api/` proxied
+  behind basic auth. Note that :9095 answers anonymously as admin and must not be exposed without the
+  proxy.
 ASSUMES LANDED: S11.
 MUST NOT TOUCH: everything under `src/` and `server/`.
 TESTS FIRST: none, docs only (not code under the TDD gate).
@@ -573,16 +641,63 @@ Run once, in order, from `/home/abrennan/dev/flexagg2++` on branch `activepivot-
 3. `npx vitest run` → exit 0 (the one full frontend run)
 4. `.venv/bin/python -m pytest -q server/tests` → exit 0 (the one full backend run)
 5. `npx vite build` → exit 0
-6. `grep -rn '"/pivot"\|/views"' src --include=*.ts --include=*.tsx | grep -v views-api` → no output
+6. `grep -rn '"/pivot"' src/api src/ap src/pivot` → no output (the views URLs are asserted by S11's
+   `views.test.ts`)
 7. `git log --oneline activepivot-explorer` shows one commit per step S1–S12, each after a review PASS
    (S12 owner-read)
-8. Live smoke, with :9095, :8010 and :8020 up: open `/flexagg2++/pivot`, pick a manager/date/set, build
+8. Live smoke, with :9095, :8010 and :8020 up: open `http://localhost:5175/pivot`, pick a manager/date/set, build
    Factor × Net exposure, expand a factor group, save the view, reload, load it. Reported by the
    orchestrator; the owner confirms at the S12 break.
 
 ## 8. Review findings — disposition
 
 (Filled per round. Cap 3, per D4.)
+
+**Round 1 — input: source (barra_poc frontend + risk_api + live :9095). Verdict NOT YET, 8 findings.**
+The orchestrator re-checked 1(c), 1(d) and 4 live / on disk before folding.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | MDX shape wrong on multi-level hierarchies: bare deep member resolves to the first match; `.Members` of a deep level collapses on caption; CrossJoin of two levels of one hierarchy 400s; WHERE on an axis hierarchy 400s | Accepted. S4: full-path members, one set per hierarchy, sub-select for axis-hierarchy filters, tests (i)–(k). S5: path value per level + `#label` caption. S7: label shown |
+| 2 | S5 short-name keys don't match `rowsFromRecords`' `rec[dim]`; Vega-Lite reads `.`/`[` as nesting | Accepted. S5 keys by level key, collision rule dropped. S7 aliases chart fields |
+| 3 | S7 omits `src/routes/Pivot.tsx` (what-if bar, `/analysis` panel, hard-coded short names); `reload` is a second `/pivot` site | Accepted. Pivot.tsx and `bindings.ts` moved into S7; S8 keeps FieldList |
+| 4 | `process.env` / `import.meta.env` don't type-check (no `@types/node`, no vite client types) | Accepted. S1 `loadEnv`; S2/S11 proxies use `env`. (a vite-env.d.ts file was added here, then dropped with the owner's base-path change: no `import.meta.env` left) |
+| 5 | Filter pickers read `dims.members` keyed by risk_api names → empty | Accepted. S8 adds `fetchMembers` in `pivotSource.ts` |
+| 6 | Dollar formatting lost (`units`/`dollar_measures` never set) | Accepted. S6 carries `dollar_measures`; S7 sets them |
+| 7 | Trimmed suite is 11 files / 42 tests, not 63 | Accepted. §4 and S1 GATE |
+| 8 | Parity: DaySet/PriceSet warnings missing; rule 2 stricter than risk_api | Accepted. Rule 4 added; rule 2 marked deliberate |
+| — | Below bar: S10 section-prefixed folder, `.json` file ids, 400 vs 409, no-op delete; S11 "new folder" contradicts "as the seed" | S10 now defers to barra's `views_api.py` on status codes and folder shape (one line, removes a claim). S11 drops "new folder". The rest noted, not actioned |
+
+**Owner amendment between rounds 2 and 3:** dev port 5175, app served at `/` instead of barra's
+`/flexagg2++/` (§3). Folded into S1, S2, S7 smoke, S11, S12, §7.
+
+**Round 2 — input: the document itself (internal consistency). Verdict NOT YET, 7 findings.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | S7 gate / §7 item 6 grep can never pass (router's own `"/pivot"`; `/views` half) | Accepted. Grep scoped to `src/api src/ap src/pivot`; views URLs asserted by S11's test |
+| 2 | `ApError` constructor unspecified; S7 constructs it | Accepted. S2 states the constructor |
+| 3 | `fetchMembers` would have to write MDX outside `mdx.ts` | Accepted. S8 builds it with `buildMdx` + `cellsetToRecords` |
+| 4 | Rule 1 "fires on every query" with >1 manager loaded; proposed: fire only when Manager not filtered to one | Fix rejected: risk_api refuses these three on every multi-manager query, filtered or not (round 1 source check), so the proposal would be weaker than risk_api. Rule 1 now says so in one line |
+| 5 | Stale owners: table says bindings S8 / store S10; S6 calls `Bindings` a stub | Accepted. Table S7/S9; `Bindings` defined and kept in `guards.ts` |
+| 6 | S7 never says to wait for rules; `nonEmpty` unspecified | Accepted. S7: `enabled` on rules; `nonEmpty` always true |
+| 7 | S8 FAIL catches S7's hard-coded default row | Accepted. `DEFAULT_ROWS` in `bindings.ts` |
+| — | Below bar: S12 gate on long-running servers; IMPORTS gaps; `/meta` values vs AP single-part paths unprobed | Noted, not actioned. The `/meta` point is covered by the S7 live smoke |
+
+**Round 3 — input: source (seed, risk_api live, :9095 live). Verdict NOT YET, 3 findings.** S1, the context
+fold (every `/meta` value is a one-part path: 126 dates, 123 managers, 7 sets), the measure lists, and the
+result shapes were all confirmed sound.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | `memberKey`'s `[ALL].[AllMember]` form 400s on the four slicing hierarchies (Units, StressShock, CorrStress, ScenarioDay); breaks the default dollar view | Accepted; orchestrator re-checked live. `ApQuery.slicing`; slicing members written `[d].[h].[level].[p]`; S4 test (l); S5 drops `AllMember` only if present; S3 states depth |
+| 2 | S8: FieldList's `scenCtx`/`dayCtx` warnings use short names, and S8's FAIL rule traps any rewrite | Accepted. S8 deletes them; S6 guards own the rules |
+| 3 | S7 leaves PivotGrid unchanged, so headers show bracketed keys and `␞` paths | Accepted. PivotGrid (+ test) into S7 with a `captions` prop; S5 review Q3 narrowed |
+| — | Below bar: FieldList chips show raw keys; 4 MDX calls when only `per_row` is needed; col/row level sharing a hierarchy | Noted, not actioned |
+
+**Loop closed at the cap (3).** Round 3 still found new criteria (slicing hierarchies), so the plan did not
+converge; per §2a the run dispatches and lets the steps find the rest. **The round-3 fold-ins are unreviewed
+text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
 
 ## 9. DECISIONS-OPEN
 

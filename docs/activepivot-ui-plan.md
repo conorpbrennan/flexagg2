@@ -711,6 +711,12 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   `loadEnv` result the step prescribes; default equals barra's hardcoded target).
 - S1: `hooks.ts` keeps `useMeta`, `useDims`, `useWhatif` (+ `Trade`), because `routes/Pivot.tsx` imports
   `useWhatif`; `types.ts` keeps the 15 types those files, the views API and the kept tests import.
+- S2: the proxy key is the regex `^/ap/` (rewrite `^/ap/` -> `/`), not the bare prefix `/ap`, because a bare
+  `/ap` key also matches `/api/...` and would depend on key order.
+- S2: `RawDiscovery` holds only `catalogs[].{name, cubes[].name}` (the live facts name no discovery fields
+  beyond catalog and cube); S3 widens it when it types the model.
+- S2: error trimming falls back to the code-stripped text, then `HTTP <status>`, so a message is never "".
+  Error bodies with an empty or absent `errorChain` give `HTTP <status>`.
 
 ## 10. As built
 

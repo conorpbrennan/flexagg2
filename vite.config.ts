@@ -23,6 +23,12 @@ export default defineConfig(({ mode }) => {
             });
           },
         },
+        // ActivePivot REST: /ap/activeviam/... -> :9095/activeviam/... (strips exactly AP_BASE).
+        "^/ap/": {
+          target: env.AP_TARGET || "http://127.0.0.1:9095",
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/ap\//, "/"),
+        },
       },
     },
     test: {

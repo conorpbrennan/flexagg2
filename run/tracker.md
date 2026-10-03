@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
 BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 impl ~12 min.
-IN FLIGHT: S4c deep review round 1 (S7 unstaged in the tree; then S7 fix for its one old-form test, then S7 review).
+IN FLIGHT: S7 review round 1.
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -80,7 +80,9 @@ STEP S6: PASS
   disagreements: rule 4 quiet when DaySet/PriceSet on an axis (as risk_api); rule 2 stricter than risk_api (as planned)
   decisions:     plan §9 S6 lines (hierarchy matching via parseLevelKey, null until dims+meta, missing managers = multi)
 
-STEP S4c: IN FLIGHT (deep review round 1) — inserted 2026-10-03 from S7's report (member form 400 live)
+STEP S4c: PASS — inserted 2026-10-03 from S7's report (member form 400 live)
+  commit:  ee83e99
+  reviews: code-reviewer-deep r1 PASS, advisory 3 (~2 min); report run/reports/S4c-review-1.md
   reports: run/reports/S4c-implementer-1.md
   gate:    tsc -b 0; vitest on HEAD+S4c via review worktree; in main tree 167/168 (the 1 is S7's old-form test, S7 fixes it); live probes 200 x4
   stage:   src/ap/mdx.ts, mdx.test.ts, plan (S4c block + §9 incl. S7 lines), tracker, S6 review report, S4c implementer report
@@ -88,8 +90,9 @@ STEP S4c: IN FLIGHT (deep review round 1) — inserted 2026-10-03 from S7's repo
   disagreements: reused private hierKey instead of new imports
   decisions:     plan §9 S4c lines
 
-STEP S7: IN FLIGHT (implementation done, unstaged; waiting for S4c to land, then review round 1)
-  reports: run/reports/S7-implementer-1.md
+STEP S7: IN FLIGHT (review round 1)
+  reports: run/reports/S7-implementer-1.md, S7-implementer-2.md (pre-review fix: one old-form test; live smoke 5/5 + drill PASS unrewritten)
+  stage:   S7 file set (13 files), plan, tracker, S4c review report, S7 implementer reports
   gate:    tsc -b 0; vitest 0 (18 files / 167 tests); "/pivot" grep empty; apMdx only in pivotSource; live smoke 5/5 only with member form rewritten
   disagreements: S4 memberKey level-before-[ALL] form 400s live (orchestrator confirmed) -> inserted S4c; usePivot call sites merged; enabled done imperatively
   decisions:     plan §9 S7 lines (makeArgs adds slicing+depth, margin query counts, Units filter in query only, drill replaces hierarchy filter, context fold, ChartMode aliases)

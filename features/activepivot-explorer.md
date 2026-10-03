@@ -24,15 +24,20 @@
 - run/reports/S4b-implementer-1.md
 - run/reports/S4b-review-1.md
 - run/reports/S4c-implementer-1.md
+- run/reports/S4c-review-1.md
 - run/reports/S5-implementer-1.md
 - run/reports/S5-review-1.md
 - run/reports/S6-implementer-1.md
 - run/reports/S6-review-1.md
+- run/reports/S7-implementer-1.md
+- run/reports/S7-implementer-2.md
 - run/tracker.md
 - src/App.tsx
 - src/ap/__fixtures__/cellset-rows-cols.json
 - src/ap/__fixtures__/cellset-rows.json
 - src/ap/__fixtures__/discovery.json
+- src/ap/bindings.test.ts
+- src/ap/bindings.ts
 - src/ap/cellset.test.ts
 - src/ap/cellset.ts
 - src/ap/client.test.ts
@@ -43,6 +48,8 @@
 - src/ap/guards.ts
 - src/ap/mdx.test.ts
 - src/ap/mdx.ts
+- src/ap/pivotSource.test.ts
+- src/ap/pivotSource.ts
 - src/api/client.ts
 - src/api/hooks.ts
 - src/api/stream.test.ts
@@ -82,6 +89,14 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `ee83e99` — S4c: write non-slicing members under the hierarchy, not the level
+  - docs/activepivot-ui-plan.md
+  - run/reports/S4c-implementer-1.md
+  - run/reports/S6-review-1.md
+  - run/tracker.md
+  - src/ap/mdx.test.ts
+  - src/ap/mdx.ts
 
 - 2026-10-03 `508a02b` — S6: barra's pivot safety rules as client-side guards
   - docs/activepivot-ui-plan.md

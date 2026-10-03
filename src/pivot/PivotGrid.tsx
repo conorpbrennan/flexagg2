@@ -9,6 +9,24 @@ import type { ColDef, GridReadyEvent, ICellRendererParams, SortChangedEvent } fr
 import { COL_SEP, LABEL_COL, TOTAL_COL, sortIdFor, sortKeyFor, type DisplayRow, type PivotConfig } from "./usePivot";
 import type { SortItem } from "../api/types";
 import { pct, num, money } from "../lib/format";
+import { parseLevelKey } from "../ap/discovery";
+import { splitPath } from "../ap/mdx";
+
+const NO_CAPTIONS: Record<string, string> = {};
+// A level key's caption: the discovery caption when known, else the level name — never the bracketed key.
+function levelCaption(key: string, captions: Record<string, string>): string {
+  if (captions[key]) return captions[key];
+  try { return parseLevelKey(key).level; } catch { return key; }
+}
+// The label column header: the row levels' captions, joined.
+export const labelHeader = (rows: string[], captions: Record<string, string>): string =>
+  rows.map((k) => levelCaption(k, captions)).join(" › ");
+// `<col member> · <measure>`: the member's label when known, else the last part of its path.
+export function valueHeader(cm: string, measure: string, captions: Record<string, string>): string {
+  if (!cm) return measure;
+  const label = captions[cm] ?? splitPath(cm).slice(-1)[0];
+  return `${label} · ${measure}`;
+}
 
 interface GridRow {
   __row?: DisplayRow;
@@ -48,7 +66,7 @@ function heatStyle(v: number, min: number, max: number) {
 }
 
 export function PivotGrid({
-  flat, colMembers, measures, cfg, grand, dollarMeasures = [], onToggle, onSort,
+  flat, colMembers, measures, cfg, grand, dollarMeasures = [], captions = NO_CAPTIONS, onToggle, onSort,
 }: {
   flat: DisplayRow[];
   colMembers: string[];
@@ -56,6 +74,7 @@ export function PivotGrid({
   cfg: PivotConfig;
   grand: Record<string, number | null>;
   dollarMeasures?: string[];
+  captions?: Record<string, string>; // level key -> caption, column-member path -> label (from usePivot)
   onToggle: (r: DisplayRow) => void;
   onSort?: (sort: SortItem[]) => void;
 }) {
@@ -84,7 +103,7 @@ export function PivotGrid({
     });
 
     const labelCol: ColDef<GridRow> = {
-      headerName: cfg.rows.join(" › "),
+      headerName: labelHeader(cfg.rows, captions),
       field: LABEL_COL,
       colId: LABEL_COL,
       comparator: treeOrder,
@@ -110,7 +129,7 @@ export function PivotGrid({
       for (const m of measures) {
         const key = `${cm}${COL_SEP}${m}`;
         valueCols.push({
-          headerName: cm ? `${cm} · ${m}` : m,
+          headerName: valueHeader(cm, m, captions),
           comparator: treeOrder,
           // measure names contain dots (e.g. "Scenario VaR 97.5"); AG Grid reads a dotted `field` as a
           // nested path and renders blank, so read the literal key via valueGetter (colId keeps identity).
@@ -129,7 +148,7 @@ export function PivotGrid({
     }
 
     return { rowData: rows, columnDefs: [labelCol, ...valueCols] };
-  }, [flat, colMembers, measures, cfg, dollarMeasures, onToggle]);
+  }, [flat, colMembers, measures, cfg, dollarMeasures, captions, onToggle]);
 
   const pinnedBottomRowData = useMemo(() => {
     if (!cfg.totals || !Object.keys(grand).length) return [];

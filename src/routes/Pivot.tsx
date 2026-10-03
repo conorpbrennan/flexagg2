@@ -1,114 +1,32 @@
 // Pivot workspace (docs/vite-ui-plan.md §5): the Excel-style field list, the server-driven drill
-// grid (or chart mode), the saved-view Repository, and on-demand /analysis commentary. The grid is a
-// pure renderer — every number comes from a /pivot call behind the cube's allowlist guard.
-import { Suspense, lazy, useEffect, useState } from "react";
+// grid (or chart mode) and the saved-view Repository. The grid is a pure renderer — every number comes
+// from an ActivePivot query behind the browser-side guards (src/ap/pivotSource.ts).
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
-import { useDims, useMeta, useWhatif } from "../api/hooks";
-import { usePivot, hypoParams, type PivotConfig } from "../pivot/usePivot";
+import { useDims } from "../api/hooks";
+import { BINDINGS, DEFAULT_ROWS, checkBindings, contextFilters } from "../ap/bindings";
+import { useCubeModel } from "../ap/discovery";
+import { useGuardRules } from "../ap/guards";
+import { usePivot, type PivotConfig } from "../pivot/usePivot";
 import { FieldList } from "../pivot/FieldList";
 import { PivotGrid } from "../pivot/PivotGrid";
 // Vega is ~heavy; only load it when the user switches to chart mode.
 const ChartMode = lazy(() => import("../pivot/ChartMode").then((m) => ({ default: m.ChartMode })));
 import { Repository } from "../pivot/Repository";
-import { StreamPanel } from "../components/StreamPanel";
 import { QueryState } from "../components/ui";
 import type { ViewState } from "../api/types";
 
-// ---- Hypothetical bar: price THIS pivot under what-if trades and/or factor shocks. Each query
-// runs on a transient cube branch/scenario (stateless server-side); the amber strip makes it
-// impossible to mistake a hypothetical grid for the held portfolio. Not persisted in saved views. ----
-function HypoBar({ cfg, date, manager, apply }: {
-  cfg: PivotConfig; date: string; manager: string;
-  apply: (next: PivotConfig) => void;
-}) {
-  const { data: meta } = useMeta();
-  const boot = useWhatif(date, manager, []);          // holdings + universe for the trade picker
-  const [pos, setPos] = useState("");
-  const [wgt, setWgt] = useState("");
-  const [fac, setFac] = useState("");
-  const [sig, setSig] = useState("");
-  const holdings = boot.data?.holdings ?? [];
-  const universe = boot.data?.universe ?? [];
-  const held = new Map(holdings.map((h) => [h.position, h]));
-  const names = [...holdings,
-    ...universe.filter((u) => !held.has(u.position)).map((u) => ({ ...u, weight: 0 }))];
-  const factors = (meta?.factors ?? []).filter((f) => f !== "Market");
-  const active = cfg.whatif.length > 0 || Object.keys(cfg.shocks).length > 0;
-
-  const addTrade = () => {
-    const w = Number(wgt);
-    if (!pos || Number.isNaN(w)) return;
-    const t = names.find((n) => n.position === pos);
-    apply({ ...cfg, whatif: [...cfg.whatif.filter((x) => x.position !== pos),
-                             { position: pos, ticker: t?.ticker ?? pos, weight: w }] });
-    setPos(""); setWgt("");
-  };
-  const addShock = () => {
-    const s = Number(sig);
-    if (!fac || Number.isNaN(s) || s === 0) return;
-    apply({ ...cfg, shocks: { ...cfg.shocks, [fac]: s } });
-    setFac(""); setSig("");
-  };
-
-  return (
-    <div className="small" style={{ margin: "0.4rem 0", padding: "0.45rem 0.6rem",
-      borderLeft: "3px solid #b07d2b", background: "rgba(176,125,43,0.06)" }}>
-      <div className="row" style={{ flexWrap: "wrap", gap: "0.4rem 1rem" }}>
-        <strong style={{ color: "#b07d2b" }}>Hypothetical</strong>
-        <span className="row" style={{ gap: "0.3rem" }}>
-          <select value={pos} onChange={(e) => setPos(e.target.value)}>
-            <option value="">trade name…</option>
-            {names.map((n) => <option key={n.position} value={n.position}>{n.ticker}</option>)}
-          </select>
-          <input type="number" step={0.005} placeholder="weight" style={{ width: "4.6rem" }}
-            value={wgt} onChange={(e) => setWgt(e.target.value)} />
-          <button disabled={!pos || wgt === ""} onClick={addTrade}>add trade</button>
-        </span>
-        <span className="row" style={{ gap: "0.3rem" }}>
-          <select value={fac} onChange={(e) => setFac(e.target.value)}>
-            <option value="">shock factor…</option>
-            {factors.map((f) => <option key={f}>{f}</option>)}
-          </select>
-          <input type="number" step={0.5} placeholder="σ" style={{ width: "3.4rem" }}
-            value={sig} onChange={(e) => setSig(e.target.value)} />
-          <button disabled={!fac || sig === ""} onClick={addShock}>add shock</button>
-        </span>
-        {active && (
-          <button onClick={() => apply({ ...cfg, whatif: [], shocks: {} })}>clear all</button>
-        )}
-      </div>
-      {active && (
-        <div className="row" style={{ flexWrap: "wrap", gap: "0.3rem", marginTop: "0.35rem" }}>
-          {cfg.whatif.map((t) => (
-            <button key={t.position} title="remove"
-              onClick={() => apply({ ...cfg, whatif: cfg.whatif.filter((x) => x.position !== t.position) })}>
-              {t.ticker.toUpperCase()} → {(t.weight * 100).toFixed(1)}% ×
-            </button>
-          ))}
-          {Object.entries(cfg.shocks).map(([f, s]) => (
-            <button key={f} title="remove"
-              onClick={() => { const sh = { ...cfg.shocks }; delete sh[f]; apply({ ...cfg, shocks: sh }); }}>
-              {f} {s > 0 ? "+" : ""}{s}σ ×
-            </button>
-          ))}
-          <span className="muted">
-            — every number in this grid is branch-priced under the hypothetical
-            {cfg.whatif.length ? "" : ""}. Attribution measures stay the held portfolio.
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
+const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 export function Pivot() {
   const { date, scenario, manager } = useApp();
   const dimsQ = useDims();
+  const model = useCubeModel().data ?? null;
+  const rules = useGuardRules(); // null until /dims and /meta have loaded: no query runs before that
+  const missing = model ? checkBindings(model) : [];
   const [mode, setMode] = useState<"grid" | "chart">("grid");
   const [showRepo, setShowRepo] = useState(false);
-  const [showAnalysis, setShowAnalysis] = useState(false);
-  const [showHypo, setShowHypo] = useState(false);
   // the currently-loaded saved view (name + its description), shown in the bottom description pane
   const [loadedView, setLoadedView] = useState<{ name: string; description?: string } | null>(null);
   // the loaded view's full saved state: fields Vite has no control for (date_fmt, chart/queries)
@@ -117,14 +35,18 @@ export function Pivot() {
   // a charted view is self-describing: its named queries + Vega-Lite spec(s), rendered verbatim
   const [chartView, setChartView] = useState<Pick<ViewState, "queries" | "chart"> | null>(null);
 
-  // seed the pivot filters from the global context bar (§9): Date + ScenarioSet, overridable.
+  // seed the pivot filters from the global context bar (§9): Manager + Date + ScenarioSet, overridable.
+  const ctxNow = contextFilters({ manager, date, scenario });
+  // the context filters last folded into cfg.filters: a filter on a context level that differs from this
+  // is the user's own (a picked member, a loaded view) and wins over the context.
+  const folded = useRef<Record<string, string[]>>(ctxNow);
   const pivot = usePivot({
-    rows: ["Sector"], measures: ["Net exposure", "Scenario VaR 99"],
-    filters: { Date: [date], ScenarioSet: [scenario] },
+    rows: DEFAULT_ROWS, measures: ["Net exposure", "Scenario VaR 99"],
+    filters: ctxNow,
     totals: true, rowTot: false, hideEmpty: true, heat: true, asPct: false, prec: 3, sort: [],
     units: "dollar",
-  });
-  const { cfg, setCfg, reload, toggleExpand, flat, colMembers, grand, dollarMeasures, warning, loading, error } = pivot;
+  }, { model, rules });
+  const { cfg, setCfg, reload, toggleExpand, flat, colMembers, grand, dollarMeasures, captions, warning, loading, error } = pivot;
 
   // Cross-lens drill link (?drill=<json {rows, cols?, measures, filters}>, e.g. from the
   // Attribution reconcile drawer): captured ONCE at mount, consumed inside the fold effect below
@@ -140,19 +62,19 @@ export function Pivot() {
     try { return JSON.parse(raw); } catch { return null; }
   });
 
-  // Reload whenever the cube is ready or the global context (date / scenario) changes, folding them
-  // into the pivot filters AND re-querying — so changing the scenario dropdown updates the numbers
-  // immediately (previously it updated the filter chip but not the grid). ScenarioSet is only sliced
-  // when it is NOT already on an axis: a view may put ScenarioSet on Rows/Columns to COMPARE across
-  // sets (e.g. Concentration — Risk HHI), and those must not be collapsed to the single global set.
+  // Reload whenever the cube and the guard rules are ready or the global context (manager / date /
+  // scenario) changes, folding them into the pivot filters AND re-querying — so changing the scenario
+  // dropdown updates the numbers immediately. ScenarioSet is only sliced when it is NOT already on an
+  // axis: a view may put ScenarioSet on Rows/Columns to COMPARE across sets (e.g. Concentration — Risk
+  // HHI), and those must not be collapsed to the single global set. Nothing runs before the guard rules
+  // (and the cube model) have loaded.
   useEffect(() => {
-    if (!dimsQ.data || !date) return;
+    if (!dimsQ.data || !date || !model || !rules || missing.length > 0) return;
     if (pendingDrill) {
       const next: PivotConfig = { ...cfg,
         rows: pendingDrill.rows ?? cfg.rows, cols: pendingDrill.cols ?? [],
         measures: pendingDrill.measures ?? cfg.measures,
-        filters: pendingDrill.filters ?? cfg.filters,
-        whatif: [], shocks: {} };
+        filters: pendingDrill.filters ?? cfg.filters };
       setCfg(next);
       setMode("grid");
       reload(next);
@@ -162,15 +84,22 @@ export function Pivot() {
       setSearchParams({}, { replace: true });
       return;
     }
-    const onAxis = cfg.rows.includes("ScenarioSet") || cfg.cols.includes("ScenarioSet");
-    const filters: Record<string, string[]> = { ...cfg.filters, Date: [date] };
-    if (onAxis) delete filters.ScenarioSet;
-    else filters.ScenarioSet = [scenario];
+    const ctx = contextFilters({ manager, date, scenario });
+    if (cfg.rows.includes(BINDINGS.scenarioSet) || cfg.cols.includes(BINDINGS.scenarioSet)) {
+      delete ctx[BINDINGS.scenarioSet];
+    }
+    const filters: Record<string, string[]> = { ...cfg.filters };
+    for (const k of [BINDINGS.manager, BINDINGS.date, BINDINGS.scenarioSet]) {
+      const cur = filters[k], prev = folded.current[k];
+      if (cur && !(prev && sameList(cur, prev))) continue; // the user's own filter wins
+      if (ctx[k]) filters[k] = ctx[k]; else delete filters[k];
+    }
+    folded.current = ctx;
     const next = { ...cfg, filters };
     setCfg(next);
     reload(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dimsQ.data, date, scenario]);
+  }, [dimsQ.data, date, scenario, manager, model, rules]);
 
   const loadViewState = (s: ViewState, name: string) => {
     // Build the next config explicitly and hand it straight to reload(). Do NOT rely on setCfg +
@@ -191,7 +120,6 @@ export function Pivot() {
       sort: Array.isArray(s.sort) ? s.sort : [],
       // default $ in every report (2026-08-22); an explicit "weight" in a saved view still wins.
       units: s.units === "weight" ? "weight" : "dollar",
-      whatif: [], shocks: {},   // a saved view is a canonical report — never load it hypothetical
     };
     setCfg(next);
     setMode(s.render === "chart" ? "chart" : "grid");
@@ -214,13 +142,6 @@ export function Pivot() {
     render: mode, description: loadedView?.description,
   };
 
-  const hypoActive = cfg.whatif.length > 0 || Object.keys(cfg.shocks).length > 0;
-  const analysisBody = {
-    rows: cfg.rows.join(","), cols: cfg.cols.join(","), measures: cfg.measures.join(","),
-    filters: JSON.stringify(cfg.filters), totals: cfg.totals,
-    name: hypoActive ? "pivot view (HYPOTHETICAL)" : "pivot view",
-    ...hypoParams(cfg),
-  };
 
   // the view's display options — Streamlit's sidebar set — shown in the builder's Display zone
   const display = (
@@ -261,14 +182,11 @@ export function Pivot() {
           <button className={mode === "grid" ? "primary" : ""} onClick={() => setMode("grid")}>Grid</button>
           <button className={mode === "chart" ? "primary" : ""} onClick={() => setMode("chart")}>Chart</button>
           <button onClick={() => setShowRepo((s) => !s)}>{showRepo ? "Hide" : "Views"}</button>
-          <button className={hypoActive ? "primary" : ""} onClick={() => setShowHypo((s) => !s)}>
-            Hypothetical{hypoActive ? " ●" : ""}</button>
         </div>
       </div>
 
-      {(showHypo || hypoActive) && (
-        <HypoBar cfg={cfg} date={date} manager={manager}
-          apply={(next) => { setCfg(next); reload(next); }} />
+      {missing.length > 0 && (
+        <div className="err small">the cube has no level for the context fields: {missing.join(", ")}</div>
       )}
       {warning && <div className="rag-amber small" style={{ margin: "0.3rem 0" }}>⚠ {warning}</div>}
       {error && <div className="err small">{error}</div>}
@@ -281,11 +199,12 @@ export function Pivot() {
               {loading && <div className="spin">querying cube…</div>}
               {mode === "grid" ? (
                 <PivotGrid flat={flat} colMembers={colMembers} measures={cfg.measures}
-                  cfg={cfg} grand={grand} dollarMeasures={dollarMeasures} onToggle={toggleExpand}
+                  cfg={cfg} grand={grand} dollarMeasures={dollarMeasures} captions={captions}
+                  onToggle={toggleExpand}
                   onSort={(sort) => setCfg((c) => ({ ...c, sort }))} />
               ) : (
                 <Suspense fallback={<div className="spin">loading chart…</div>}>
-                  <ChartMode cfg={cfg} savedQueries={chartView?.queries} savedChart={chartView?.chart} />
+                  <ChartMode cfg={cfg} model={model} rules={rules} savedQueries={chartView?.queries} savedChart={chartView?.chart} />
                 </Suspense>
               )}
             </div>
@@ -304,18 +223,6 @@ export function Pivot() {
           {loadedView.description
             ? <p className="reading" style={{ margin: "0.4rem 0 0" }}>{loadedView.description}</p>
             : <p className="muted small" style={{ margin: "0.4rem 0 0" }}>No description saved for this view.</p>}
-        </div>
-      )}
-
-      <hr className="rule" />
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <h2 style={{ margin: 0 }}>Risk-analyst commentary</h2>
-        <button onClick={() => setShowAnalysis((s) => !s)}>{showAnalysis ? "Hide" : "Show"}</button>
-      </div>
-      {showAnalysis && (
-        <div style={{ marginTop: "0.6rem" }}>
-          <StreamPanel path="/analysis" body={analysisBody}
-            cacheKey={`an:${JSON.stringify(analysisBody)}`} label="Generate commentary for this view" />
         </div>
       )}
     </main>

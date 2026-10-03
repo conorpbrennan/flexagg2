@@ -1,15 +1,21 @@
 // Pivot workspace state + the hand-rolled server-side drill (docs/vite-ui-plan.md §5).
 //
-// INVARIANT: the grid is a pure renderer. Every reshape and every drill is a /pivot call to Atoti
-// behind the _validate_pivot allowlist; the browser never groups, sums, or pivots numbers itself.
-// VaR is non-additive, so the only total we render is the cube's `grand` corner — never a client sum.
+// INVARIANT: the grid is a pure renderer. Every reshape and every drill is an ActivePivot MDX query
+// (src/ap/pivotSource.ts) behind the browser-side guards; the browser never groups, sums, or pivots
+// numbers itself. VaR is non-additive, so the only totals we render are the cube's own margins.
 //
 // The drill is lazy: the base query asks rows=[rowDims[0]] (+ an optional single col dim) and shows
-// one row per top member. Expanding a row issues a fresh /pivot for the NEXT row dim, filtered to the
+// one row per top member. Expanding a row issues a fresh query for the NEXT row dim, filtered to the
 // parent's member path, and splices the returned children underneath (indented). Collapsing drops them.
+// Row/col/filter keys are level keys ("[dim].[hier].[level]"); a member is a path string (see mdx.ts).
 import { useCallback, useMemo, useState } from "react";
-import { apiGet } from "../api/client";
 import type { PivotResult, Rec, SortItem } from "../api/types";
+import { BINDINGS, DEFAULT_ROWS } from "../ap/bindings";
+import { labelKey } from "../ap/cellset";
+import type { CubeModel } from "../ap/discovery";
+import { parseLevelKey } from "../ap/discovery";
+import type { GuardRules } from "../ap/guards";
+import { fetchPivotLevel, makeArgs } from "../ap/pivotSource";
 
 export const COL_SEP = "␟"; // separates colMember from measure in a value key
 export const TOTAL_COL = "Total"; // the col member carrying the per-row cube margin (Total column)
@@ -30,19 +36,13 @@ export interface PivotConfig {
   prec: number;
   units: "weight" | "dollar";   // <- view `units`: dollar = weight-unit measures × Manager MV (re-query)
   sort: SortItem[];        // <- view `sort`, Streamlit colIds (see sortKeyFor / sortIdFor)
-  // hypothetical (transient cube branch/scenario per query; NOT persisted in saved views):
-  whatif: { position: string; ticker: string; weight: number }[];
-  shocks: Record<string, number>;
 }
 
-// the /pivot hypothetical query params for a config (shared by every query incl. drills)
-export function hypoParams(cfg: PivotConfig): Record<string, string> {
-  const p: Record<string, string> = {};
-  if (cfg.whatif.length) {
-    p.whatif = JSON.stringify(cfg.whatif.map(({ position, weight }) => ({ position, weight })));
-  }
-  if (Object.keys(cfg.shocks).length) p.shocks = JSON.stringify(cfg.shocks);
-  return p;
+// What a query needs besides the config: the cube's shape and the guard rules. Either null = not loaded
+// yet, and nothing is fetched (a pivot never runs unguarded).
+export interface PivotSrc {
+  model: CubeModel | null;
+  rules: GuardRules | null;
 }
 
 export interface DisplayRow {
@@ -55,30 +55,44 @@ export interface DisplayRow {
   expanded: boolean;
 }
 
+const hierOf = (key: string): string | null => {
+  try {
+    const r = parseLevelKey(key);
+    return `${r.dim}\u0000${r.hier}`;
+  } catch {
+    return null;
+  }
+};
+
+// Pin the drill path onto the base filters. Two filters on one hierarchy are refused by buildMdx, and a
+// deeper path entry already carries its parents, so each path entry REPLACES every other filter on its
+// hierarchy (the parent's, a shallower or deeper user filter): the deepest path entry wins.
 export function mergeFilters(base: Record<string, string[]>, path: Record<string, string>) {
   const f = { ...base };
-  for (const [k, v] of Object.entries(path)) f[k] = [v];
+  for (const [k, v] of Object.entries(path)) {
+    const h = hierOf(k);
+    if (h !== null) for (const other of Object.keys(f)) if (other !== k && hierOf(other) === h) delete f[other];
+    f[k] = [v];
+  }
   return f;
 }
 
 async function queryLevel(
-  cfg: PivotConfig, levelDims: string[], path: Record<string, string>,
+  cfg: PivotConfig, levelDims: string[], path: Record<string, string>, src: { model: CubeModel; rules: GuardRules },
+  totals: boolean,
 ): Promise<PivotResult> {
   const colDim = cfg.cols[0];
-  const levels = colDim ? [...levelDims, colDim] : levelDims;
   const filters = mergeFilters(cfg.filters, path);
-  // the Total column is the cube's per_row margin at THIS level (levels = the row dims), so it is
+  if (cfg.units === "dollar") filters[BINDINGS.units] = ["$"]; // Units context; weight adds nothing
+  // the Total column is the cube's per_row margin at THIS level (rows = the row dims), so it is
   // requested with the level query itself — never summed client-side (VaR is non-additive)
-  const wantRowTot = cfg.rowTot && !!colDim;
-  return apiGet<PivotResult>("/pivot", {
-    rows: wantRowTot ? levelDims.join(",") : levels.join(","),
-    ...(wantRowTot ? { cols: colDim } : {}),
-    measures: cfg.measures.join(","),
-    filters: JSON.stringify(filters),
-    totals: wantRowTot,
-    ...(cfg.units === "dollar" ? { units: "dollar" } : {}),
-    ...hypoParams(cfg),
-  });
+  return fetchPivotLevel(
+    makeArgs(src.model, {
+      rows: levelDims, cols: colDim ? [colDim] : [], measures: cfg.measures, filters,
+      totals, rowTot: cfg.rowTot && !!colDim,
+    }),
+    src.rules, BINDINGS,
+  );
 }
 
 // ---- sort: Streamlit colId <-> grid value key -------------------------------------------------
@@ -143,7 +157,7 @@ export function rowsFromRecords(records: Rec[], dim: string, colDim: string | un
     let row = byMember.get(member);
     if (!row) {
       row = {
-        key, label: member, level,
+        key, label: String(rec[labelKey(dim)] ?? member), level,
         path: { ...parentPath, [dim]: member },
         values: {}, expandable, expanded: false,
       };
@@ -167,18 +181,26 @@ export function rowsFromRecords(records: Rec[], dim: string, colDim: string | un
   return [...byMember.values()];
 }
 
-export function usePivot(initial: Partial<PivotConfig>) {
+export function usePivot(initial: Partial<PivotConfig>, src: PivotSrc) {
+  const { model, rules } = src;
   const [cfg, setCfg] = useState<PivotConfig>({
-    rows: ["Factor"], cols: [], measures: ["Net exposure"], filters: {},
+    rows: DEFAULT_ROWS, cols: [], measures: ["Net exposure"], filters: {},
     totals: true, rowTot: false, hideEmpty: true, heat: true, asPct: false, prec: 3, sort: [],
-    units: "dollar", whatif: [], shocks: {}, ...initial,
+    units: "dollar", ...initial,
   });
 
   const [tree, setTree] = useState<Record<string, DisplayRow[]>>({}); // parentKey -> children
   const [topRows, setTopRows] = useState<DisplayRow[]>([]);
   const [colMembers, setColMembers] = useState<string[]>([""]);
   const [grand, setGrand] = useState<Record<string, number | null>>({});
-  const [dollarMeasures, setDollarMeasures] = useState<string[]>([]);  // what /pivot priced in $
+  const [dollarMeasures, setDollarMeasures] = useState<string[]>([]);  // what the query priced in $
+  const [colCaptions, setColCaptions] = useState<Record<string, string>>({}); // col member path -> label
+  // level key -> discovery caption, for the grid's headers
+  const levelCaptions = useMemo(
+    () => Object.fromEntries((model?.levels ?? []).map((l) => [l.key, l.caption])) as Record<string, string>,
+    [model],
+  );
+  const captions = useMemo(() => ({ ...levelCaptions, ...colCaptions }), [levelCaptions, colCaptions]);
   const [warning, setWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,17 +208,27 @@ export function usePivot(initial: Partial<PivotConfig>) {
   // (re)load the base level + reset the tree. Called on Apply.
   const reload = useCallback(async (override?: PivotConfig) => {
     const c = override ?? cfg;
+    if (!model || !rules) return;   // guard rules / cube shape not loaded: wait, never run unguarded
     if (!c.rows.length || !c.measures.length) {
       setError("pick at least one row field and one measure");
       return;
     }
     setLoading(true); setError(null);
     try {
-      const base = await queryLevel(c, [c.rows[0]], {});
+      // one fetch carries the level AND its cube-computed margins (per_row, per_col, grand)
+      const base = await queryLevel(c, [c.rows[0]], {}, { model, rules }, c.totals);
       const colDim = c.cols[0];
       const cms = colDim
         ? Array.from(new Set(base.records.map((r) => String(r[colDim] ?? "")))).filter(Boolean).sort()
         : [""];
+      if (colDim) {
+        const cc: Record<string, string> = {};
+        for (const r of base.records) {
+          const cm = String(r[colDim] ?? "");
+          if (cm) cc[cm] = String(r[labelKey(colDim)] ?? cm);
+        }
+        setColCaptions(cc);
+      } else setColCaptions({});
       if (colDim && c.rowTot) cms.push(TOTAL_COL);
       const expandable = c.rows.length > 1;
       const rows = rowsFromRecords(base.records, c.rows[0], colDim, c.measures, 0, {}, "", expandable,
@@ -209,23 +241,17 @@ export function usePivot(initial: Partial<PivotConfig>) {
       // the Total row: cube-computed margins only — the grand corner, plus per_col (one per col
       // member) when a column dim is on. Never a client-side sum.
       if (c.totals) {
-        const g = await apiGet<PivotResult>("/pivot", {
-          rows: c.rows[0], ...(colDim ? { cols: colDim } : {}), measures: c.measures.join(","),
-          filters: JSON.stringify(c.filters), totals: true,
-          ...(c.units === "dollar" ? { units: "dollar" } : {}),
-          ...hypoParams(c),
-        });
         const gr: Record<string, number | null> = {};
-        for (const m of c.measures) gr[`${COL_SEP}${m}`] = g.grand?.[m] ?? null;
+        for (const m of c.measures) gr[`${COL_SEP}${m}`] = base.grand?.[m] ?? null;
         if (colDim) {
-          for (const rec of g.per_col ?? []) {
+          for (const rec of base.per_col ?? []) {
             const cm = String(rec[colDim] ?? "");
             for (const m of c.measures) {
               const v = rec[m];
               gr[`${cm}${COL_SEP}${m}`] = typeof v === "number" ? v : null;
             }
           }
-          for (const m of c.measures) gr[`${TOTAL_COL}${COL_SEP}${m}`] = g.grand?.[m] ?? null;
+          for (const m of c.measures) gr[`${TOTAL_COL}${COL_SEP}${m}`] = base.grand?.[m] ?? null;
         }
         setGrand(gr);
       } else setGrand({});
@@ -234,10 +260,11 @@ export function usePivot(initial: Partial<PivotConfig>) {
     } finally {
       setLoading(false);
     }
-  }, [cfg]);
+  }, [cfg, model, rules]);
 
   const toggleExpand = useCallback(async (row: DisplayRow) => {
     if (row.level >= cfg.rows.length - 1) return;
+    if (!model || !rules) return;
     if (tree[row.key]) {
       // collapse: drop children (and any deeper cached descendants stay cached but hidden)
       const flip = (rs: DisplayRow[]) => rs.map((r) => (r.key === row.key ? { ...r, expanded: false } : r));
@@ -253,7 +280,7 @@ export function usePivot(initial: Partial<PivotConfig>) {
     setLoading(true);
     try {
       const nextDim = cfg.rows[row.level + 1];
-      const res = await queryLevel(cfg, cfg.rows.slice(0, row.level + 2), row.path);
+      const res = await queryLevel(cfg, cfg.rows.slice(0, row.level + 2), row.path, { model, rules }, false);
       const expandable = row.level + 1 < cfg.rows.length - 1;
       const children = rowsFromRecords(res.records, nextDim, cfg.cols[0], cfg.measures,
         row.level + 1, row.path, row.key, expandable, res.per_row);
@@ -265,7 +292,7 @@ export function usePivot(initial: Partial<PivotConfig>) {
     } finally {
       setLoading(false);
     }
-  }, [cfg, tree]);
+  }, [cfg, tree, model, rules]);
 
   // flatten the expanded tree into the ordered list AG Grid renders: siblings sorted by the
   // view's sort at EVERY level (the drill indentation survives a sort), all-blank body rows
@@ -295,6 +322,6 @@ export function usePivot(initial: Partial<PivotConfig>) {
 
   return {
     cfg, setCfg, reload, toggleExpand,
-    flat, colMembers: shownColMembers, grand, dollarMeasures, warning, loading, error,
+    flat, colMembers: shownColMembers, grand, dollarMeasures, captions, warning, loading, error,
   };
 }

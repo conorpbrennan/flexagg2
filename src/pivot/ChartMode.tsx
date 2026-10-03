@@ -1,13 +1,17 @@
 // Chart mode (docs/vite-ui-plan.md §5), parity with the Streamlit render_spec/_render_graphs:
-// a charted view is SELF-DESCRIBING — `queries` (named, self-contained /pivot queries) + `chart`
+// a charted view is SELF-DESCRIBING — `queries` (named, self-contained pivot queries) + `chart`
 // (a complete Vega-Lite v5 spec, or a LIST of them; each carries a `source` naming its query). We run
-// each query and bind its records as that spec's default dataset, then render verbatim with react-vega
-// — the charts are reused, not reimplemented. If a view has no saved chart (ad-hoc chart mode), the
-// builder reconstructs a simple spec from form controls.
+// each query (fetchPivotLevel, no drill) and bind its records as that spec's default dataset, then render
+// verbatim with react-vega — the charts are reused, not reimplemented. If a view has no saved chart
+// (ad-hoc chart mode), the builder reconstructs a simple spec from form controls.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { VegaLite } from "react-vega";
-import { apiGet } from "../api/client";
-import type { PivotResult, PivotQuery, Rec } from "../api/types";
+import type { PivotQuery, Rec } from "../api/types";
+import { BINDINGS } from "../ap/bindings";
+import { labelKey } from "../ap/cellset";
+import type { CubeModel } from "../ap/discovery";
+import type { GuardRules } from "../ap/guards";
+import { fetchPivotLevel, makeArgs } from "../ap/pivotSource";
 import type { PivotConfig } from "./usePivot";
 
 // A Vega-Lite spec is opaque JSON — we render saved specs verbatim, never introspect them.
@@ -34,28 +38,50 @@ function useContainerWidth() {
 }
 const specWidth = (w: number) => Math.max(320, (w || FALLBACK_W) - 4);
 
-function runQuery(q: PivotQuery): Promise<Rec[]> {
-  return apiGet<PivotResult>("/pivot", {
-    rows: (q.rows ?? []).join(","), cols: (q.cols ?? []).join(","),
-    measures: (q.measures ?? []).join(","),
-    filters: JSON.stringify(q.filters ?? {}), totals: false,
-  }).then((r) => r.records);
+// What a chart needs besides the config: the cube's shape and the guard rules. Either null = not loaded
+// yet; no query runs (a chart never runs unguarded either).
+interface Src { model: CubeModel | null; rules: GuardRules | null }
+
+// Vega-Lite reads "." and "[" in a field name as nested access, and level keys and measure names carry
+// both, so the records are re-keyed to plain aliases f0, f1, ... in the order rows, cols, measures. A
+// level's value is its member label (not the path string). `alias` maps the original key to its alias.
+export function aliasRecords(records: Rec[], q: { rows: string[]; cols: string[]; measures: string[] }) {
+  const levels = [...q.rows, ...q.cols];
+  const keys = [...levels, ...q.measures];
+  const alias: Record<string, string> = {};
+  keys.forEach((k, i) => { alias[k] = `f${i}`; });
+  const out = records.map((r) => {
+    const o: Rec = {};
+    keys.forEach((k, i) => { o[alias[k]] = i < levels.length ? (r[labelKey(k)] ?? r[k] ?? null) : (r[k] ?? null); });
+    return o;
+  });
+  return { records: out, alias };
+}
+
+async function runQuery(q: PivotQuery, src: { model: CubeModel; rules: GuardRules }) {
+  const rows = q.rows ?? [], cols = q.cols ?? [], measures = q.measures ?? [];
+  const res = await fetchPivotLevel(
+    makeArgs(src.model, { rows, cols, measures, filters: q.filters ?? {}, totals: false, rowTot: false }),
+    src.rules, BINDINGS,
+  );
+  return aliasRecords(res.records, { rows, cols, measures });
 }
 
 // ---- saved chart: run every query, bind records to each spec by its `source` name, render verbatim ----
-function SavedChart({ queries, specs }: { queries: PivotQuery[]; specs: VegaSpec[] }) {
+function SavedChart({ queries, specs, model, rules }: { queries: PivotQuery[]; specs: VegaSpec[] } & Src) {
   const [dataByName, setDataByName] = useState<Record<string, Rec[]> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [ref, width] = useContainerWidth();
 
   useEffect(() => {
+    if (!model || !rules) return;   // wait for the guard rules; nothing runs unguarded
     let live = true;
     setDataByName(null); setErr(null);
-    Promise.all(queries.map(async (q) => [q.name, await runQuery(q)] as const))
+    Promise.all(queries.map(async (q) => [q.name, (await runQuery(q, { model, rules })).records] as const))
       .then((pairs) => { if (live) setDataByName(Object.fromEntries(pairs)); })
       .catch((e) => { if (live) setErr((e as Error).message); });
     return () => { live = false; };
-  }, [JSON.stringify(queries)]);
+  }, [JSON.stringify(queries), model, rules]);
 
   return (
     <div ref={ref} style={{ width: "100%" }}>
@@ -82,23 +108,27 @@ function SavedChart({ queries, specs }: { queries: PivotQuery[]; specs: VegaSpec
 }
 
 // ---- ad-hoc builder (no saved chart): a simple spec from mark / measure / height ----
-function defaultSpec(rows: string[], measure: string, mark: string, height: number, width: number): VegaSpec {
+// `alias` maps the level key / measure name to its plain field name; `xTitle` is the level's caption.
+function defaultSpec(alias: Record<string, string>, xKey: string, xTitle: string, measure: string, mark: string,
+  height: number, width: number): VegaSpec {
+  const x = alias[xKey], y = alias[measure];
   return {
     $schema: "https://vega.github.io/schema/vega-lite/v5.json",
     mark: mark === "bar" ? { type: "bar", color: "#3b5e8c" } : { type: mark, color: "#3b5e8c", point: mark === "line" },
     width: specWidth(width), height,
     encoding: {
-      x: { field: rows[0], type: "nominal", sort: "-y", axis: { labelAngle: -40 } },
-      y: { field: measure, type: "quantitative", axis: { title: measure } },
-      tooltip: [{ field: rows[0] }, { field: measure, type: "quantitative", format: ".4f" }],
+      x: { field: x, type: "nominal", sort: "-y", axis: { labelAngle: -40, title: xTitle } },
+      y: { field: y, type: "quantitative", axis: { title: measure } },
+      tooltip: [{ field: x, title: xTitle }, { field: y, type: "quantitative", title: measure, format: ".4f" }],
     },
     config: { background: "#fffff8", view: { stroke: null }, axis: { grid: false, domainColor: "#d8d5cd", labelColor: "#111", titleColor: "#6b6b63" } },
     data: { name: "table" },
   };
 }
 
-function Builder({ cfg }: { cfg: PivotConfig }) {
+function Builder({ cfg, model, rules }: { cfg: PivotConfig } & Src) {
   const [records, setRecords] = useState<Rec[]>([]);
+  const [alias, setAlias] = useState<Record<string, string>>({});
   const [mark, setMark] = useState("bar");
   const [measure, setMeasure] = useState(cfg.measures[0] ?? "Net exposure");
   const [height, setHeight] = useState(280);
@@ -108,16 +138,22 @@ function Builder({ cfg }: { cfg: PivotConfig }) {
   const [chartRef, chartW] = useContainerWidth();
 
   useEffect(() => {
+    if (!model || !rules) return;   // wait for the guard rules; nothing runs unguarded
     let live = true;
-    runQuery({ name: "q", rows: cfg.rows.slice(0, 1), cols: [], measures: cfg.measures, filters: cfg.filters })
-      .then((r) => { if (live) setRecords(r); }).catch((e) => setErr((e as Error).message));
+    setErr(null);
+    runQuery({ name: "q", rows: cfg.rows.slice(0, 1), cols: [], measures: cfg.measures, filters: cfg.filters },
+      { model, rules })
+      .then((r) => { if (live) { setRecords(r.records); setAlias(r.alias); } })
+      .catch((e) => { if (live) setErr((e as Error).message); });
     return () => { live = false; };
-  }, [cfg.rows, cfg.measures, cfg.filters]);
+  }, [cfg.rows, cfg.measures, cfg.filters, model, rules]);
 
+  const xKey = cfg.rows[0];
+  const xTitle = model?.levels.find((l) => l.key === xKey)?.caption ?? xKey;
   const spec = useMemo<VegaSpec>(() => {
     if (useRaw && raw.trim()) { try { return JSON.parse(raw); } catch { /* keep default */ } }
-    return defaultSpec(cfg.rows, measure, mark, height, chartW);
-  }, [useRaw, raw, cfg.rows, measure, mark, height, chartW]);
+    return defaultSpec(alias, xKey, xTitle, measure, mark, height, chartW);
+  }, [useRaw, raw, alias, xKey, xTitle, measure, mark, height, chartW]);
 
   return (
     <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
@@ -152,19 +188,19 @@ function Builder({ cfg }: { cfg: PivotConfig }) {
       <div ref={chartRef} style={{ flex: 1, minWidth: "20rem" }}>
         {err && <div className="err small">{err}</div>}
         <VegaLite spec={spec as never} data={{ table: records }} actions={false} />
-        <div className="muted small">{records.length} rows · x = {cfg.rows[0]}</div>
+        <div className="muted small">{records.length} rows · x = {xTitle}</div>
       </div>
     </div>
   );
 }
 
 export function ChartMode({
-  cfg, savedQueries, savedChart,
-}: { cfg: PivotConfig; savedQueries?: PivotQuery[]; savedChart?: VegaSpec | VegaSpec[] | null }) {
+  cfg, model, rules, savedQueries, savedChart,
+}: { cfg: PivotConfig; savedQueries?: PivotQuery[]; savedChart?: VegaSpec | VegaSpec[] | null } & Src) {
   const specs = savedChart ? (Array.isArray(savedChart) ? savedChart : [savedChart]) : [];
   // a self-describing saved chart wins; otherwise fall back to the ad-hoc builder
   if (specs.length && savedQueries && savedQueries.length) {
-    return <SavedChart queries={savedQueries} specs={specs} />;
+    return <SavedChart queries={savedQueries} specs={specs} model={model} rules={rules} />;
   }
-  return <Builder cfg={cfg} />;
+  return <Builder cfg={cfg} model={model} rules={rules} />;
 }

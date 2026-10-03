@@ -16,6 +16,7 @@ const base: ApQuery = {
   filters: {},
   nonEmpty: false,
   slicing: [UNITS],
+  depth: { [MGR]: 1, [COUNTRY]: 1, [SECTOR]: 2, [DATE]: 1, [UNITS]: 1, "[D]]].[H].[L]": 1 },
 };
 const q = (o: Partial<ApQuery>): ApQuery => ({ ...base, ...o });
 const M2 = "{[Measures].[Net exposure], [Measures].[Scenario VaR 99]}";
@@ -39,6 +40,17 @@ describe("memberKey", () => {
   });
   it("writes the short form for a slicing level", () => {
     expect(memberKey(UNITS, "$", [UNITS])).toBe("[Units].[Units].[Units].[$]");
+  });
+});
+
+describe("memberKey normalisation", () => {
+  it("(s) the level key is normalised before the slicing check and the write", () => {
+    const k = "[D]]].[H].[L]]x]";
+    expect(memberKey(k, "m", [k])).toBe("[D]]].[H].[L]]x].[m]");
+    expect(memberKey(k, "m", [])).toBe("[D]]].[H].[L]]x].[ALL].[AllMember].[m]");
+  });
+  it("(s2) a malformed level key throws from memberKey itself", () => {
+    expect(() => memberKey("[a].[b]", "m", [])).toThrow(/^bad level key: \[a\]\.\[b\]$/);
   });
 });
 
@@ -94,7 +106,7 @@ describe("buildMdx", () => {
     expect(buildMdx(q({}))).toBe(`SELECT ${M2} ON COLUMNS FROM [Exposures]`);
   });
   it("(h) empty measures throws", () => {
-    expect(() => buildMdx(q({ measures: [] }))).toThrow("select at least one measure");
+    expect(() => buildMdx(q({ measures: [] }))).toThrow(/^select at least one measure$/);
   });
   it("(i) a Sector member carries its Country path", () => {
     expect(buildMdx(q({ filters: { [SECTOR]: [pathKey(["UK", "Energy"])] } }))).toBe(
@@ -128,10 +140,47 @@ describe("buildMdx", () => {
   });
   it("two filters on levels of one hierarchy are an explicit error", () => {
     expect(() => buildMdx(q({ filters: { [COUNTRY]: ["UK"], [SECTOR]: ["UK" + SEP + "Energy"] } }))).toThrow(
-      "two filters on one hierarchy: [Securities].[Security]",
+      /^two filters on one hierarchy: \[Securities\]\.\[Security\]$/,
     );
   });
   it("an empty filter is ignored", () => {
     expect(buildMdx(q({ filters: { [COUNTRY]: [] } }))).toBe(`SELECT ${M2} ON COLUMNS FROM [Exposures]`);
+  });
+  it("(m) reversed rows [Sector, Country] still put only Sector on the axis", () => {
+    expect(buildMdx(q({ rows: [SECTOR, COUNTRY] }))).toBe(
+      `SELECT ${M2} ON COLUMNS, [Securities].[Security].[Sector].Members ON ROWS FROM [Exposures]`,
+    );
+  });
+  it("(m2) depth decides on cols too, and first-seen hierarchy order is kept", () => {
+    expect(buildMdx(q({ rows: [DATE], cols: [SECTOR, MGR, COUNTRY] }))).toBe(
+      `SELECT CrossJoin(CrossJoin(${M2}, [Securities].[Security].[Sector].Members), [Positions].[Manager].[Manager].Members) ON COLUMNS, [Exposures].[Date].[Date].Members ON ROWS FROM [Exposures]`,
+    );
+  });
+  it("(n) a missing depth throws", () => {
+    expect(() => buildMdx(q({ rows: [COUNTRY], depth: {} }))).toThrow(
+      /^no depth for \[Securities\]\.\[Security\]\.\[Country\]$/,
+    );
+    expect(() => buildMdx(q({ cols: [DATE], depth: {} }))).toThrow(
+      /^no depth for \[Exposures\]\.\[Date\]\.\[Date\]$/,
+    );
+  });
+  it("(o) a multi-part slicing member throws", () => {
+    expect(() => buildMdx(q({ filters: { [UNITS]: [pathKey(["a", "b"])] } }))).toThrow(
+      /^slicing member must be one name: \[Units\]\.\[Units\]\.\[Units\]$/,
+    );
+  });
+  it("(p) members holding [, ' and a newline come out exact", () => {
+    expect(buildMdx(q({ filters: { [COUNTRY]: ["a[b'c\nd"] } }))).toBe(
+      `SELECT ${M2} ON COLUMNS FROM [Exposures] WHERE ([Securities].[Security].[Country].[ALL].[AllMember].[a[b'c\nd])`,
+    );
+  });
+  it("(q) one hierarchy on rows and cols throws", () => {
+    expect(() => buildMdx(q({ rows: [COUNTRY], cols: [SECTOR] }))).toThrow(
+      /^hierarchy on two axes: \[Securities\]\.\[Security\]$/,
+    );
+  });
+  it("(r) an empty path part throws", () => {
+    expect(() => buildMdx(q({ filters: { [COUNTRY]: [""] } }))).toThrow(/^empty member name$/);
+    expect(() => buildMdx(q({ filters: { [SECTOR]: [pathKey(["UK", ""])] } }))).toThrow(/^empty member name$/);
   });
 });

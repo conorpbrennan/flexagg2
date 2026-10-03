@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
-BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min.
-IN FLIGHT: S4 deep review round 1.
+BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min.
+IN FLIGHT: S4b deep review round 1.
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -40,10 +40,20 @@ STEP S3: PASS
   disagreements: none
   decisions:     plan §9 S3 lines (formatString "", all-catalog search, slicing excludes Epoch, hidden hierarchies kept)
 
-STEP S4: IN FLIGHT (deep review round 1)
+STEP S4: PASS
+  commit:  9e3074a
+  reviews: code-reviewer-deep r1 PASS, important 4 (~3 min); report run/reports/S4-review-1.md -> inserted S4b
   reports: run/reports/S4-implementer-1.md
   gate:    tsc -b 0; vitest 0 (14 files / 82 tests); live: 7 shapes 200
   stage:   src/ap/mdx.ts, src/ap/mdx.test.ts, plan (§9), tracker, S3 review report, S4 implementer report
   files:   as declared
   disagreements: "deepest level" without depth in ApQuery -> last in caller order; Manager-on-rows 400 = AP retrieval limit (CancellationException), not MDX shape — S7 must keep the date context filter
   decisions:     plan §9 S4 lines (deepest=last, two filters on one hierarchy throw, empty filter ignored, nesting order)
+
+STEP S4b: IN FLIGHT (deep review round 1) — inserted 2026-10-03 from S4 review IMPORTANT 1-4
+  reports: run/reports/S4b-implementer-1.md
+  gate:    tsc -b 0; vitest 0 (14 files / 91 tests); grep -cF esc owner 0/1 (gate text corrected from grep -c, author error)
+  stage:   src/ap/mdx.ts, mdx.test.ts, discovery.ts, plan (S4b block + §9), tracker, S4 review report, S4b implementer report
+  files:   as declared
+  disagreements: gate grep needed -F (fixed in plan); memberKey normalisation is validation only; implementer used python heredocs for edits (harness rule), order still test-first
+  decisions:     plan §9 S4b lines

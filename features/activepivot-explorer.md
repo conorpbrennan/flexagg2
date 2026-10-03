@@ -20,6 +20,8 @@
 - run/reports/S3-implementer-1.md
 - run/reports/S3-review-1.md
 - run/reports/S4-implementer-1.md
+- run/reports/S4-review-1.md
+- run/reports/S4b-implementer-1.md
 - run/tracker.md
 - src/App.tsx
 - src/ap/__fixtures__/discovery.json
@@ -68,6 +70,14 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `9e3074a` — S4: pivot query -> MDX text in one pure function
+  - docs/activepivot-ui-plan.md
+  - run/reports/S3-review-1.md
+  - run/reports/S4-implementer-1.md
+  - run/tracker.md
+  - src/ap/mdx.test.ts
+  - src/ap/mdx.ts
 
 - 2026-10-03 `69bd722` — S3: typed cube model from ActivePivot discovery
   - docs/activepivot-ui-plan.md

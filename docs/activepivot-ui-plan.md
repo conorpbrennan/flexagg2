@@ -324,6 +324,41 @@ exact strings.
 ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: 25 min; 1–2 rounds (deep review).
 
+**S4b. The MDX builder picks the deepest level by real depth and is fully pinned by tests.** (Inserted
+2026-10-03 from S4's deep review, four IMPORTANT findings outside its FAIL list; §18.6. UNREVIEWED block: a
+disagreement with it is a DISAGREEMENTS entry.)
+EXTEND `src/ap/mdx.ts`, `src/ap/mdx.test.ts`, `src/ap/discovery.ts`.
+
+WHY NOW: S5 cuts each level's path at its depth and S7 lets the user reorder row fields; both need depth in
+the query, and S4 inferred "deepest" from caller order, which silently drops the deeper level when reversed.
+
+WHAT TO BUILD:
+- `ApQuery` gains `depth: Record<string, number>` (level key → `LevelInfo.depth`; callers fill it from the
+  `CubeModel` the way they fill `slicing`). `buildMdx` throws `Error("no depth for <key>")` for any `rows`/`cols`
+  key it lacks. One set per hierarchy on an axis is the level with the greatest depth, whatever the order given;
+  hierarchies keep first-seen order. Every existing test passes a `depth` map; their expected strings do not change.
+- `memberKey` normalises its level key itself (`parseLevelKey` → `levelKey`) before writing it and before the
+  `slicing` check; `buildMdx` stops normalising on its behalf.
+- `buildMdx` throws explicitly when one hierarchy is on both rows and cols (`Error("hierarchy on two axes: <h>")`),
+  and when a member path has an empty part (`Error("empty member name")`).
+- `esc` has one owner: export it from `discovery.ts`; `mdx.ts` imports it and deletes its own copy.
+IMPORTS: `src/ap/discovery.ts` (`levelKey`, `parseLevelKey`, `esc`).
+ASSUMES LANDED: S4.
+MUST NOT TOUCH: `src/ap/cellset.ts` (S5), `src/ap/client.ts`.
+TESTS FIRST (in `mdx.test.ts`, before the code): rows `[Sector, Country]` (reversed) puts only Sector on the axis,
+exact string; missing depth throws; a multi-part slicing member throws; members holding `[`, `'` and a newline
+come out exact; same hierarchy on rows and cols throws; empty path part throws; `memberKey` given an unnormalised
+key writes the normalised form. Every throw assertion is exact (`toThrow(/^…$/)`), including (h).
+GATE: §2 standard checks, and `grep -cF 'replace(/\]/g' src/ap/mdx.ts` prints `0`, and
+`grep -cF 'replace(/\]/g' src/ap/discovery.ts` prints `1`.
+REVIEW:
+1. Can any order of `rows`/`cols` put a shallower level of a hierarchy on the axis?
+2. Is every throw tested with an exact message?
+3. Did any S4 expected MDX string change? (It must not.)
+FAIL if: a shallower level can win; an S4 expected string changed; `esc` defined twice.
+ROLLBACK: one `git revert` of this step.
+BUDGET: 15 min; 1 round (deep tier: it touches the escaping).
+
 **S5. An MDX cellset becomes the `PivotResult` shape the grid already renders.**
 NEW `src/ap/cellset.ts`, `src/ap/cellset.test.ts`, `src/ap/__fixtures__/cellset-rows.json`,
 `src/ap/__fixtures__/cellset-rows-cols.json`.
@@ -739,6 +774,16 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
 - S4: MDX shape: `CrossJoin(a, b)` nested left to right; first filter is the innermost sub-select; WHERE
   tuples keep filter key order. Live: `[Positions].[Manager].[Manager].Members` on rows returns HTTP 400
   even hand-written with one measure (other hierarchies 200); not an S4 shape issue, S7 should look.
+
+- Amendment 2026-10-03 (orchestrator): S4b inserted from S4's deep review (IMPORTANT 1–4 and two advisories).
+  `ApQuery` gains `depth`; S5 reads level depth from `q.depth`; S7 fills it from `CubeModel` beside `slicing`.
+  S7 note from the same review: a second drill must replace the parent filter on that hierarchy (the child's full
+  path already carries it), since two filters on one hierarchy throw.
+- S4b: depth is looked up by the key exactly as given in `rows`/`cols` (not normalised); a missing entry throws
+  `no depth for <key as given>`. Equal depths keep the first given. The empty-name check lives in `memberKey`
+  (so it covers filters of every form), `hierarchy on two axes` is checked in `buildMdx` after axis reduction.
+- S4b: `parseLevelKey` -> `levelKey` is idempotent for any valid key, so normalising in `memberKey` changes no
+  output; it now serves as validation (a malformed key throws `bad level key` from `memberKey` itself).
 
 ## 10. As built
 

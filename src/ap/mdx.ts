@@ -1,14 +1,15 @@
 // A pivot request becomes MDX text. Pure. Every name from the caller reaches the output through esc.
-import { levelKey, parseLevelKey } from "./discovery";
+import { esc, levelKey, parseLevelKey } from "./discovery";
 
 export interface ApQuery {
   cube: string;
-  rows: string[]; // level keys; several levels of one hierarchy: the LAST one given is the deepest
+  rows: string[]; // level keys; of several levels of one hierarchy the deepest (by depth) is used
   cols: string[];
   measures: string[];
   filters: Record<string, string[]>; // level key -> member path strings (see pathKey)
   nonEmpty: boolean;
   slicing: string[]; // CubeModel.slicing
+  depth: Record<string, number>; // level key -> LevelInfo.depth, for every key in rows/cols
 }
 
 const SEP = "␞";
@@ -16,18 +17,18 @@ const SEP = "␞";
 export const pathKey = (parts: string[]): string => parts.join(SEP);
 export const splitPath = (s: string): string[] => s.split(SEP);
 
-const esc = (s: string) => s.replace(/\]/g, "]]");
-
 export const measureKey = (name: string): string => `[Measures].[${esc(name)}]`;
 
 // Full-path member. A slicing level takes the short form: the ALL form is a 400 there.
 export function memberKey(lvlKey: string, path: string, slicing: string[]): string {
+  const lk = levelKey(parseLevelKey(lvlKey));
   const parts = splitPath(path);
-  if (slicing.includes(lvlKey)) {
-    if (parts.length !== 1) throw new Error(`slicing member must be one name: ${lvlKey}`);
-    return `${lvlKey}.[${esc(parts[0])}]`;
+  if (parts.some((p) => p === "")) throw new Error("empty member name");
+  if (slicing.includes(lk)) {
+    if (parts.length !== 1) throw new Error(`slicing member must be one name: ${lk}`);
+    return `${lk}.[${esc(parts[0])}]`;
   }
-  return `${lvlKey}.[ALL].[AllMember]${parts.map((p) => `.[${esc(p)}]`).join("")}`;
+  return `${lk}.[ALL].[AllMember]${parts.map((p) => `.[${esc(p)}]`).join("")}`;
 }
 
 const hierKey = (lvlKey: string): string => {
@@ -35,14 +36,18 @@ const hierKey = (lvlKey: string): string => {
   return `[${esc(r.dim)}].[${esc(r.hier)}]`;
 };
 
-// Normalised key: the exact bracket form, escaped once, whatever spelling the caller used.
-const norm = (k: string): string => levelKey(parseLevelKey(k));
-
-// One set per hierarchy: the last level given for a hierarchy wins; hierarchies keep first-seen order.
-function axisLevels(keys: string[]): string[] {
-  const byHier = new Map<string, string>();
-  for (const k of keys) byHier.set(hierKey(k), norm(k));
-  return [...byHier.values()];
+// One set per hierarchy: the level with the greatest depth wins, whatever the order given; hierarchies keep
+// first-seen order.
+function axisLevels(keys: string[], depth: Record<string, number>): string[] {
+  const byHier = new Map<string, { key: string; depth: number }>();
+  for (const k of keys) {
+    const d = depth[k];
+    if (d === undefined) throw new Error(`no depth for ${k}`);
+    const h = hierKey(k);
+    const cur = byHier.get(h);
+    if (!cur || d > cur.depth) byHier.set(h, { key: levelKey(parseLevelKey(k)), depth: d });
+  }
+  return [...byHier.values()].map((v) => v.key);
 }
 
 function crossJoin(sets: string[]): string {
@@ -51,8 +56,12 @@ function crossJoin(sets: string[]): string {
 
 export function buildMdx(q: ApQuery): string {
   if (q.measures.length === 0) throw new Error("select at least one measure");
-  const rows = axisLevels(q.rows);
-  const cols = axisLevels(q.cols);
+  const rows = axisLevels(q.rows, q.depth);
+  const cols = axisLevels(q.cols, q.depth);
+  const rowHiers = new Set(rows.map(hierKey));
+  for (const c of cols) {
+    if (rowHiers.has(hierKey(c))) throw new Error(`hierarchy on two axes: ${hierKey(c)}`);
+  }
   const onAxis = new Set([...rows, ...cols].map(hierKey));
 
   const colSets = [`{${q.measures.map(measureKey).join(", ")}}`, ...cols.map((l) => `${l}.Members`)];
@@ -68,8 +77,7 @@ export function buildMdx(q: ApQuery): string {
     const h = hierKey(key);
     if (seen.has(h)) throw new Error(`two filters on one hierarchy: ${h}`);
     seen.add(h);
-    const lk = norm(key);
-    const mk = members.map((m) => memberKey(lk, m, q.slicing));
+    const mk = members.map((m) => memberKey(key, m, q.slicing));
     if (mk.length === 1 && !onAxis.has(h)) where.push(mk[0]);
     else subs.push(`{${mk.join(", ")}}`);
   }

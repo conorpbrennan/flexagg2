@@ -25,7 +25,7 @@ export interface CubeModel {
   slicing: string[];
 }
 
-const esc = (s: string) => s.replace(/\]/g, "]]");
+export const esc = (s: string) => s.replace(/\]/g, "]]");
 
 export function levelKey(r: LevelRef): string {
   return `[${esc(r.dim)}].[${esc(r.hier)}].[${esc(r.level)}]`;

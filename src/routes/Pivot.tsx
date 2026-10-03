@@ -192,9 +192,9 @@ export function Pivot() {
       {error && <div className="err small">{error}</div>}
 
       <QueryState q={dimsQ}>
-        {(dims) => (
+        {() => (
           <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginTop: "0.6rem" }}>
-            <FieldList cfg={cfg} setCfg={setCfg} dims={dims} onApply={() => reload()} display={display} />
+            <FieldList cfg={cfg} setCfg={setCfg} onApply={() => reload()} display={display} />
             <div style={{ flex: 1, minWidth: 0 }}>
               {loading && <div className="spin">querying cube…</div>}
               {mode === "grid" ? (

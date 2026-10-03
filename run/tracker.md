@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
-BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 impl ~12 min.
-IN FLIGHT: S7 review round 1.
+BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min).
+IN FLIGHT: S8 review round 1.
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -90,9 +90,18 @@ STEP S4c: PASS — inserted 2026-10-03 from S7's report (member form 400 live)
   disagreements: reused private hierKey instead of new imports
   decisions:     plan §9 S4c lines
 
-STEP S7: IN FLIGHT (review round 1)
+STEP S7: PASS
+  commit:  393f342
+  reviews: code-reviewer r1 PASS, advisory 2 (~1 min); report run/reports/S7-review-1.md
   reports: run/reports/S7-implementer-1.md, S7-implementer-2.md (pre-review fix: one old-form test; live smoke 5/5 + drill PASS unrewritten)
   stage:   S7 file set (13 files), plan, tracker, S4c review report, S7 implementer reports
   gate:    tsc -b 0; vitest 0 (18 files / 167 tests); "/pivot" grep empty; apMdx only in pivotSource; live smoke 5/5 only with member form rewritten
   disagreements: S4 memberKey level-before-[ALL] form 400s live (orchestrator confirmed) -> inserted S4c; usePivot call sites merged; enabled done imperatively
   decisions:     plan §9 S7 lines (makeArgs adds slicing+depth, margin query counts, Units filter in query only, drill replaces hierarchy filter, context fold, ChartMode aliases)
+
+STEP S8: IN FLIGHT (review round 1)
+  reports: run/reports/S8-implementer-1.md, S8-implementer-2.md (pre-review fix, amended file set)
+  gate:    tsc -b 0; vitest 0 (19 files / 178 tests) after fix; live fetchMembers OK on 6 levels incl. Position (5173); 86 of 175 measures visible (orchestrator re-check)
+  stage:   S8 file set (6 files incl. amended Pivot.test.tsx), plan, tracker, S7 review report, S8 implementer reports
+  disagreements: fetchMembers(model, levelKey, signal?) (amended); missing-bindings line already from S7, pivot does not run without bindings (kept; open for owner in §9)
+  decisions:     plan §9 S8 lines

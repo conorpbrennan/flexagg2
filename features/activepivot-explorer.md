@@ -31,6 +31,9 @@
 - run/reports/S6-review-1.md
 - run/reports/S7-implementer-1.md
 - run/reports/S7-implementer-2.md
+- run/reports/S7-review-1.md
+- run/reports/S8-implementer-1.md
+- run/reports/S8-implementer-2.md
 - run/tracker.md
 - src/App.tsx
 - src/ap/__fixtures__/cellset-rows-cols.json
@@ -70,6 +73,7 @@
 - src/main.tsx
 - src/pivot/ChartMode.test.tsx
 - src/pivot/ChartMode.tsx
+- src/pivot/FieldList.test.tsx
 - src/pivot/FieldList.tsx
 - src/pivot/PivotGrid.test.ts
 - src/pivot/PivotGrid.tsx
@@ -89,6 +93,25 @@
 - vite.config.ts
 
 ## History
+
+- 2026-10-03 `393f342` — S7: pivot grid and chart mode run on ActivePivot
+  - run/reports/S4c-review-1.md
+  - run/reports/S7-implementer-1.md
+  - run/reports/S7-implementer-2.md
+  - run/tracker.md
+  - src/ap/bindings.test.ts
+  - src/ap/bindings.ts
+  - src/ap/pivotSource.test.ts
+  - src/ap/pivotSource.ts
+  - src/pivot/ChartMode.test.tsx
+  - src/pivot/ChartMode.tsx
+  - src/pivot/PivotGrid.test.ts
+  - src/pivot/PivotGrid.tsx
+  - src/pivot/usePivot.test.ts
+  - src/pivot/usePivot.ts
+  - src/routes/Pivot.rejection.test.tsx
+  - src/routes/Pivot.test.tsx
+  - src/routes/Pivot.tsx
 
 - 2026-10-03 `ee83e99` — S4c: write non-slicing members under the hierarchy, not the level
   - docs/activepivot-ui-plan.md

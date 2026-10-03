@@ -145,16 +145,18 @@ describe("Pivot — loading a saved view", () => {
     await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
 
     // default filters chips include the context bar's ScenarioSet=HistFull
-    expect(screen.getByText(`${SCEN}=HistFull`)).toBeInTheDocument();
+    expect(screen.getByText("ScenarioSet=HistFull")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Views"));
     await waitFor(() => expect(screen.getByText("Concentration — Risk HHI")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Concentration — Risk HHI"));
 
     // the loaded view's FILTERS replace the defaults: Date=2024-11-30 in, ScenarioSet=HistFull out
-    await waitFor(() => expect(screen.getByText(`${DATE}=2024-11-30`)).toBeInTheDocument());
-    expect(screen.getByText(`${MGR}=Soros`)).toBeInTheDocument();
-    expect(screen.queryByText(`${SCEN}=HistFull`)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Date=2024-11-30")).toBeInTheDocument());
+    expect(screen.getByText("Manager=Soros")).toBeInTheDocument();
+    expect(screen.queryByText("ScenarioSet=HistFull")).not.toBeInTheDocument();
+    // chips show captions, never the bracketed unique name or the key separator
+    for (const chip of screen.getAllByText(/^\w+=/)) expect(chip.textContent).not.toMatch(/[[␞]/);
   });
 
   it("re-queries the cube when the scenario dropdown changes", async () => {
@@ -194,7 +196,7 @@ describe("Pivot — context and guards", () => {
 
     const selects = screen.getAllByRole("combobox") as HTMLSelectElement[];
     fireEvent.change(selects.find((s) => s.value === "HistFull")!, { target: { value: "Evt:COVID2020" } });
-    await waitFor(() => expect(screen.getByText(`${DATE}=2024-11-30`)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Date=2024-11-30")).toBeInTheDocument());
     // the view's Date (not the context's latest) is still the one queried; ScenarioSet is on rows, so no slice
     await waitFor(() => expect(lastFilters()[DATE]).toEqual(["2024-11-30"]));
     expect(lastFilters()[SCEN]).toBeUndefined();

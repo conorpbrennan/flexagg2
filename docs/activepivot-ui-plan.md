@@ -536,7 +536,8 @@ BUDGET: 30 min; 1–2 rounds. The biggest behaviour change in the plan.
 
 **S8. The field list and its filter pickers speak ActivePivot levels.**
 NEW `src/pivot/FieldList.test.tsx`. EXTEND `src/pivot/FieldList.tsx`, `src/ap/pivotSource.ts`,
-`src/ap/pivotSource.test.ts`, `src/routes/Pivot.tsx`.
+`src/ap/pivotSource.test.ts`, `src/routes/Pivot.tsx`, `src/routes/Pivot.test.tsx` (amendment 2026-10-03: its chip
+expectations pin the bracketed keys S8 removes).
 
 WHAT TO BUILD:
 - `pivotSource.ts` gains `fetchMembers(levelKey): Promise<{path: string; label: string}[]>`: the MDX is
@@ -868,6 +869,20 @@ text**: the S4 (deep), S5, S7 and S8 reviewers are told so and check them first.
   `memberKey` can call it). Live probe, 4 shapes (Date WHERE, two-Country sub-select with Country on rows, Sector path
   with Sector on rows, Units `$`): 200 x4. One S7 test (`pivotSource.test.ts`, "a guard notice ends up in warning...")
   asserts the old Date form and now fails; it is S7's fix, untouched here.
+
+- S8 (unstaged, BLOCKED on one file): `fetchMembers(model, levelKey, signal?)` takes the CubeModel first (the plan's
+  `fetchMembers(levelKey)` cannot know cube, slicing or depth); it builds `ApQuery` through `makeArgs`. `FieldList`
+  drops its `dims` prop (nothing reads `/dims` there now) and reads `useCubeModel()`; Pivot.tsx stops passing it.
+  Hidden hierarchies' levels are listed (LevelInfo has no `visible`); hidden measures are not. A filter chip shows the
+  cached member label, else the last path part. `src/routes/Pivot.test.tsx` (not in S8's file set) asserts two chips
+  as `${SCEN}=HistFull` / `${DATE}=2024-11-30` / `${MGR}=Soros`; with captions they read `ScenarioSet=HistFull` etc.
+  Needs an amendment adding that file (2 tests fail until its expectations move to captions).
+
+- Amendment 2026-10-03 (orchestrator, from S8's report): S8's file set gains EXTEND `src/routes/Pivot.test.tsx`
+  (three filter-chip expectations move from bracketed keys to captions). `fetchMembers` takes `(model, levelKey,
+  signal?)`: cube, slicing and depth come from the `CubeModel` (S4b made them required).
+- Open for the owner (S8): with a binding missing, S7's Pivot.tsx shows the missing-levels line and runs nothing;
+  the plan said "the pivot still works without the context". Kept S7's stricter behaviour (no unguarded query).
 
 ## 10. As built
 

@@ -1,10 +1,12 @@
 // One pivot level fetch: guards, then MDX, then the adapter. The only caller of apMdx outside discovery.
 import type { PivotResult } from "../api/types";
 import { ApError, apMdx, type RawCellSet } from "./client";
-import { toPivotResult } from "./cellset";
+import { cellsetToRecords, labelKey, toPivotResult } from "./cellset";
 import type { CubeModel } from "./discovery";
 import { checkQuery, type Bindings, type GuardRules } from "./guards";
 import { buildMdx, type ApQuery } from "./mdx";
+
+const MEMBER_COUNT = "contributors.COUNT";
 
 export interface PivotArgs {
   cube: string;
@@ -30,6 +32,22 @@ export function makeArgs(
     if (l) depth[k] = l.depth;
   }
   return { ...a, cube: model.cube, slicing: model.slicing, depth };
+}
+
+// The members of one level, each as its full path (what a filter stores) and its caption. One MDX call; the
+// measure only makes NON EMPTY keep members that have positions. A level the model lacks throws `no depth`.
+export async function fetchMembers(
+  model: CubeModel,
+  levelKey: string,
+  signal?: AbortSignal,
+): Promise<{ path: string; label: string }[]> {
+  const a = makeArgs(model, { rows: [levelKey], cols: [], measures: [MEMBER_COUNT], filters: {}, totals: false, rowTot: false });
+  const q: ApQuery = {
+    cube: a.cube, rows: a.rows, cols: [], measures: a.measures, filters: {}, nonEmpty: true,
+    slicing: a.slicing, depth: a.depth,
+  };
+  const recs = cellsetToRecords(await apMdx(buildMdx(q), { signal }), q);
+  return recs.map((r) => ({ path: String(r[levelKey]), label: String(r[labelKey(levelKey)]) }));
 }
 
 export async function fetchPivotLevel(

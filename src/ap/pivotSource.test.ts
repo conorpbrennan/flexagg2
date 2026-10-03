@@ -4,7 +4,7 @@ import type { RawCellSet } from "./client";
 vi.mock("./client", async (orig) => ({ ...(await orig<typeof import("./client")>()), apMdx: vi.fn() }));
 
 import { ApError, apMdx } from "./client";
-import { fetchPivotLevel, makeArgs } from "./pivotSource";
+import { fetchMembers, fetchPivotLevel, makeArgs } from "./pivotSource";
 import { rulesFromDims, type Bindings, type GuardRules } from "./guards";
 import { toCubeModel } from "./discovery";
 import fixture from "./__fixtures__/discovery.json";
@@ -92,6 +92,65 @@ describe("makeArgs", () => {
     expect(a.slicing).toContain(UNITS);
     expect(a.depth[COUNTRY]).toBe(1);
     expect(a.depth[SECTOR]).toBe(2);
+  });
+});
+
+describe("fetchMembers", () => {
+  it("sends one .Members MDX and maps path and label", async () => {
+    vi.mocked(apMdx).mockImplementation(async () => ({
+      axes: [
+        {
+          id: 0,
+          hierarchies: [{ dimension: "Measures", hierarchy: "Measures" }],
+          positions: [[{ namePath: ["contributors.COUNT"], captionPath: ["contributors.COUNT"] }]],
+        },
+        {
+          id: 1,
+          hierarchies: [{ dimension: "Securities", hierarchy: "Security" }],
+          positions: [
+            [{ namePath: ["AllMember", "UK"], captionPath: ["AllMember", "United Kingdom"] }],
+            [{ namePath: ["AllMember", "US"], captionPath: ["AllMember", "US"] }],
+          ],
+        },
+      ],
+      cells: [
+        { ordinal: 0, value: 3, formattedValue: "" },
+        { ordinal: 1, value: 4, formattedValue: "" },
+      ],
+    }));
+    const ms = await fetchMembers(model, COUNTRY);
+    expect(ms).toEqual([
+      { path: "UK", label: "United Kingdom" },
+      { path: "US", label: "US" },
+    ]);
+    expect(apMdx).toHaveBeenCalledTimes(1);
+    const mdx = vi.mocked(apMdx).mock.calls[0][0];
+    expect(mdx).toContain(`${COUNTRY}.Members ON ROWS`);
+    expect(mdx).toContain("[Measures].[contributors.COUNT]");
+  });
+
+  it("a deeper level's path carries every ancestor", async () => {
+    vi.mocked(apMdx).mockImplementation(async () => ({
+      axes: [
+        {
+          id: 0,
+          hierarchies: [{ dimension: "Measures", hierarchy: "Measures" }],
+          positions: [[{ namePath: ["contributors.COUNT"], captionPath: ["contributors.COUNT"] }]],
+        },
+        {
+          id: 1,
+          hierarchies: [{ dimension: "Securities", hierarchy: "Security" }],
+          positions: [[{ namePath: ["AllMember", "UK", "Energy"], captionPath: ["AllMember", "UK", "Energy"] }]],
+        },
+      ],
+      cells: [{ ordinal: 0, value: 3, formattedValue: "" }],
+    }));
+    expect(await fetchMembers(model, SECTOR)).toEqual([{ path: "UK␞Energy", label: "Energy" }]);
+  });
+
+  it("a level the model does not have throws before any call", async () => {
+    await expect(fetchMembers(model, "[No].[Such].[Level]")).rejects.toThrow(/no depth|not in the cube/);
+    expect(apMdx).not.toHaveBeenCalled();
   });
 });
 

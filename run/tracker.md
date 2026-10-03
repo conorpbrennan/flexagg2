@@ -1,6 +1,6 @@
 RUN: docs/activepivot-ui-plan.md, revision 4. Branch: activepivot-explorer. Started: 2026-10-03 (owner go, unattended, all steps).
-BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min), S8 ~10 min, S9 ~7 min, S9b ~15 min, S10 ~6 min, S10b ~12 min.
-IN FLIGHT: S11 review round 1.
+BUDGET: §5 step budgets sum to ~4.5 h of implementation + reviews; spent: S1 ~5 min, S2 ~5 min, S3 ~5 min, S4 ~12 min, S4b ~8 min, S5 ~6 min, S6 ~5 min, S7 ~20 min (incl. S4c ~8 min), S8 ~10 min, S9 ~7 min, S9b ~15 min, S10 ~6 min, S10b ~12 min, S11 ~15 min, S12 ~10 min.
+IN FLIGHT: §7 definition of done — live browser smoke (item 8).
 TREE: staged nothing; unstaged clean. Worktrees open: none.
 
 PLAN REVIEW: 3 rounds (cap 3, D4), all NOT YET, all findings folded. Dispositions in plan §8.
@@ -151,9 +151,19 @@ STEP S10b: PASS (round 2)
   disagreements: none (save is the only state_json writer)
   decisions:     plan §9 S10b lines (check before the transaction; refusal in the store)
 
-STEP S11: IN FLIGHT (review round 1)
+STEP S11: PASS
+  commit:  cc46bbd
+  reviews: code-reviewer r1 PASS, advisory 4 (~1 min); report run/reports/S11-review-1.md
   reports: run/reports/S11-implementer-1.md, S11-implementer-2.md (pre-review fix: v2 fixtures + fixture measure swap; vitest 188/188)
   stage:   S11 amended file set (9 files), plan, tracker, S10b review-2 report, S11 implementer reports
   gate:    tsc -b 0; vitest 5 fails in Pivot*.test.tsx (v1 fixtures, outside set) -> plan amended; pytest 81; live proxy smoke save/list/load 200
   disagreements: route tests relied on v1 loading; schema_version compared as number
   decisions:     plan §9 S11 lines (client.ts base param, ^/views-api/ regex proxy, fitToModel drop line, v1/absent refused whole)
+
+STEP S12: AWAITING READER (mechanical half landed; owner read at the end, per D6)
+  reports: run/reports/S12-implementer-1.md
+  gate:    every README command run (or verified by reading where it would disturb the running barra_poc process): all 0 / 200
+  stage:   README.md, docs/serving.md, tracker, S11 review report, S12 implementer report
+  files:   as declared
+  disagreements: barra_poc starts ActivePivot and risk_api with one command (three terminals, not three services); RISK_API_URL also documented
+  review:  none (docs-only commits are not gated, per S12 REVIEW)

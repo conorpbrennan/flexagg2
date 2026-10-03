@@ -119,6 +119,21 @@
 
 ## History
 
+- 2026-10-03 `cc46bbd` — S11: Repository saves and loads views from the new store
+  - run/reports/S10b-review-2.md
+  - run/reports/S11-implementer-1.md
+  - run/reports/S11-implementer-2.md
+  - run/tracker.md
+  - src/api/client.ts
+  - src/api/types.ts
+  - src/api/views.test.ts
+  - src/api/views.ts
+  - src/pivot/Repository.test.tsx
+  - src/pivot/Repository.tsx
+  - src/routes/Pivot.rejection.test.tsx
+  - src/routes/Pivot.test.tsx
+  - vite.config.ts
+
 - 2026-10-03 `8ecdca5` — S10b: refuse non-finite numbers in saved view state
   - docs/activepivot-ui-plan.md
   - run/reports/S10-review-1.md

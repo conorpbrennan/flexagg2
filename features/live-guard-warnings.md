@@ -18,4 +18,11 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-05 `6d95eb3` — feat(Pivot): show guard refusals and notices live while editing the zones
+  - src/ap/pivotSource.ts
+  - src/pivot/FieldList.tsx
+  - src/pivot/usePivot.test.ts
+  - src/pivot/usePivot.ts
+  - src/routes/Pivot.rejection.test.tsx
+  - src/routes/Pivot.test.tsx
+  - src/routes/Pivot.tsx

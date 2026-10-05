@@ -422,3 +422,142 @@ def test_close_is_idempotent(tmp_path):
     s = ViewsStore(tmp_path / "v.db")
     s.close()
     s.close()
+
+
+def test_load_returns_the_stored_schema_version(store):
+    store.save("Public", "", "old", STATE)
+    with sqlite3.connect(store.db_path) as c:
+        c.execute("UPDATE views SET schema_version = 1")
+    assert store.load("Public", "", "old")["schema_version"] == 1
+
+
+def test_save_stamps_current_schema_version_and_resave_restamps(store):
+    store.save("Public", "", "v", STATE)
+    with sqlite3.connect(store.db_path) as c:
+        c.execute("UPDATE views SET schema_version = 1")
+    store.save("Public", "", "v", STATE)
+    assert store.load("Public", "", "v")["schema_version"] == SCHEMA_VERSION
+
+
+def test_open_migrates_a_database_without_the_column(tmp_path):
+    db = tmp_path / "old.db"
+    with sqlite3.connect(db) as c:
+        c.executescript(
+            """
+            CREATE TABLE folders (section TEXT NOT NULL, path TEXT NOT NULL,
+                                  PRIMARY KEY (section, path));
+            CREATE TABLE views (
+                id INTEGER PRIMARY KEY, section TEXT NOT NULL, folder TEXT NOT NULL,
+                name TEXT NOT NULL, slug TEXT NOT NULL, state_json TEXT NOT NULL,
+                created TEXT NOT NULL, updated TEXT NOT NULL,
+                UNIQUE (section, folder, slug));
+            INSERT INTO views(section, folder, name, slug, state_json, created, updated)
+            VALUES ('Public', '', 'Legacy', 'legacy', '{"rows": []}', 't', 't');
+            """
+        )
+    ViewsStore(db).close()  # a second open must not re-add the column
+    s = ViewsStore(db)
+    assert s.load("Public", "", "legacy")["schema_version"] == 2
+    assert s.save("Public", "", "new", STATE) == "Public/new"
+    assert s.load("Public", "", "new")["schema_version"] == SCHEMA_VERSION
+    s.close()
+
+
+_OLD_SCHEMA = """
+CREATE TABLE folders (section TEXT NOT NULL, path TEXT NOT NULL, PRIMARY KEY (section, path));
+CREATE TABLE views (
+    id INTEGER PRIMARY KEY, section TEXT NOT NULL, folder TEXT NOT NULL,
+    name TEXT NOT NULL, slug TEXT NOT NULL, state_json TEXT NOT NULL,
+    created TEXT NOT NULL, updated TEXT NOT NULL, UNIQUE (section, folder, slug));
+INSERT INTO views(section, folder, name, slug, state_json, created, updated)
+VALUES ('Public', '', 'Legacy', 'legacy', '{"rows": []}', 't', 't');
+"""
+
+
+class _SpyConn:
+    """Wraps a connection; ``on_execute(sql, conn)`` sees every statement after it runs."""
+
+    def __init__(self, conn, on_execute):
+        self._conn = conn
+        self._on_execute = on_execute
+
+    def execute(self, sql, *args):
+        result = self._conn.execute(sql, *args)
+        if sql.startswith("PRAGMA"):
+            result = iter(result.fetchall())  # read lock released before the hook runs
+        self._on_execute(sql, self._conn)
+        return result
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def _spy_on_connect(monkeypatch, on_execute):
+    real = sqlite3.connect
+    monkeypatch.setattr(
+        sqlite3, "connect", lambda *a, **k: _SpyConn(real(*a, **k), on_execute)
+    )
+    return real
+
+
+def test_concurrent_opener_altering_first_does_not_break_open(tmp_path, monkeypatch):
+    db = tmp_path / "old.db"
+    with sqlite3.connect(db) as c:
+        c.executescript(_OLD_SCHEMA)
+
+    def rival_alters_after_our_check(sql, conn):
+        # Force the race: right after this opener's column check, a second opener adds the column.
+        if sql.startswith("PRAGMA table_info") and not conn.in_transaction:
+            rival = real(db, isolation_level=None)
+            rival.execute(
+                "ALTER TABLE views ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 2"
+            )
+            rival.close()
+
+    real = _spy_on_connect(monkeypatch, rival_alters_after_our_check)
+    s = ViewsStore(db)  # must not raise "duplicate column name"
+    assert s.load("Public", "", "legacy")["schema_version"] == 2
+    s.close()
+
+
+def test_fresh_database_never_runs_alter(tmp_path, monkeypatch):
+    seen = []
+    _spy_on_connect(monkeypatch, lambda sql, conn: seen.append(sql))
+    ViewsStore(tmp_path / "fresh.db").close()
+    assert not [q for q in seen if q.lstrip().upper().startswith("ALTER")]
+
+
+@pytest.mark.parametrize("op", ["move", "rename_view", "rename_folder"])
+def test_move_and_renames_keep_a_stored_schema_version(store, op):
+    store.save("Public", "A", "v", STATE)
+    store.make_folder("Public", "", "B")
+    with sqlite3.connect(store.db_path) as c:
+        c.execute("UPDATE views SET schema_version = 1")
+    if op == "move":
+        store.move_view("Public", "A", "v", "B")
+        loaded = store.load("Public", "B", "v")
+    elif op == "rename_view":
+        store.rename_view("Public", "A", "v", "W")
+        loaded = store.load("Public", "A", "w")
+    else:
+        store.rename_folder("Public", "A", "C")
+        loaded = store.load("Public", "C", "v")
+    assert loaded["schema_version"] == 1
+
+
+def test_failed_init_closes_the_connection(tmp_path, monkeypatch):
+    conns = []
+    real = sqlite3.connect
+
+    def spy(*a, **k):
+        conns.append(real(*a, **k))
+        return conns[-1]
+
+    monkeypatch.setattr(sqlite3, "connect", spy)
+    monkeypatch.setattr(
+        ViewsStore, "_migrate", lambda self: (_ for _ in ()).throw(OSError("boom"))
+    )
+    with pytest.raises(OSError):
+        ViewsStore(tmp_path / "x.db")
+    with pytest.raises(sqlite3.ProgrammingError):
+        conns[0].execute("SELECT 1")

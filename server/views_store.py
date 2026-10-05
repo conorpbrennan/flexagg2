@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS views (
     state_json TEXT NOT NULL,
     created    TEXT NOT NULL,
     updated    TEXT NOT NULL,
+    schema_version INTEGER NOT NULL DEFAULT 2,
     UNIQUE (section, folder, slug)
 );
 """
@@ -124,7 +125,26 @@ class ViewsStore:
         self._conn = sqlite3.connect(
             self.db_path, isolation_level=None, check_same_thread=False
         )
-        self._conn.executescript(_SCHEMA)
+        try:
+            self._conn.executescript(_SCHEMA)
+            self._migrate()
+        except BaseException:
+            self._conn.close()
+            raise
+
+    def _migrate(self) -> None:
+        """Add ``views.schema_version`` to a database created before the column existed.
+
+        The DEFAULT is 2 because every row in such a database was written by v2 code, so 2 is the
+        truthful version. save() always writes SCHEMA_VERSION explicitly.
+        """
+        # BEGIN IMMEDIATE serialises openers (DDL is transactional): the loser re-checks and skips.
+        with self._tx() as c:
+            cols = {r[1] for r in c.execute("PRAGMA table_info(views)")}
+            if "schema_version" not in cols:
+                c.execute(
+                    "ALTER TABLE views ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 2"
+                )
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
@@ -179,7 +199,7 @@ class ViewsStore:
     @staticmethod
     def _view_row(c: sqlite3.Connection, section: str, folder: str, slug: str):
         row = c.execute(
-            "SELECT id, name, state_json, created, updated FROM views "
+            "SELECT id, name, state_json, created, updated, schema_version FROM views "
             "WHERE section = ? AND folder = ? AND slug = ?",
             (section, folder, slug),
         ).fetchone()
@@ -233,11 +253,11 @@ class ViewsStore:
         _check_section(section)
         _check_folder(folder)
         with self._lock:
-            _id, name, state_json, created, updated = self._view_row(
+            _id, name, state_json, created, updated, version = self._view_row(
                 self._conn, section, folder, slug
             )
         return {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": version,
             "name": name,
             "path": _display_path(section, folder),
             "created": created,
@@ -259,11 +279,12 @@ class ViewsStore:
         with self._tx() as c:
             self._ensure_folders(c, section, folder)
             c.execute(
-                "INSERT INTO views(section, folder, name, slug, state_json, created, updated) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "INSERT INTO views(section, folder, name, slug, state_json, created, updated, "
+                "schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(section, folder, slug) DO UPDATE SET "
-                "name = excluded.name, state_json = excluded.state_json, updated = excluded.updated",
-                (section, folder, name, slug, state_json, now, now),
+                "name = excluded.name, state_json = excluded.state_json, updated = excluded.updated, "
+                "schema_version = excluded.schema_version",
+                (section, folder, name, slug, state_json, now, now, SCHEMA_VERSION),
             )
         return _file(section, folder, slug)
 

@@ -324,3 +324,11 @@ def test_env_db_path_and_store_closed_on_shutdown(tmp_path, monkeypatch):
     assert db.exists()
     with pytest.raises(sqlite3.ProgrammingError):
         store._conn.execute("SELECT 1")
+
+
+def test_load_reports_the_stored_schema_version(client):
+    f = save(client)
+    assert client.get(f"/views/item/{f}").json()["schema_version"] == 2
+    with sqlite3.connect(client.app.state.store.db_path) as c:
+        c.execute("UPDATE views SET schema_version = 1")
+    assert client.get(f"/views/item/{f}").json()["schema_version"] == 1

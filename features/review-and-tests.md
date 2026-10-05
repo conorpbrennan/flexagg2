@@ -10,6 +10,9 @@
 
 - package-lock.json
 - package.json
+- server/tests/test_views_api.py
+- server/tests/test_views_store.py
+- server/views_store.py
 - src/api/hooks.test.tsx
 - src/api/hooks.ts
 - src/api/stream.test.ts
@@ -32,6 +35,14 @@
 - src/routes/Pivot.tsx
 
 ## History
+
+- 2026-10-05 `cf96b41` — fix(views): saved views follow the context; missing fields stay missing; ids URL-encoded
+  - src/api/views.test.ts
+  - src/api/views.ts
+  - src/pivot/Repository.test.tsx
+  - src/pivot/Repository.tsx
+  - src/routes/Pivot.test.tsx
+  - src/routes/Pivot.tsx
 
 - 2026-10-05 `a28b4e8` — fix(FieldList): picker resets per level; an empty filter list no longer crashes
   - src/pivot/FieldList.test.tsx

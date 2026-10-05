@@ -14,4 +14,7 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-05 `792c930` — refactor(LeftRail): type the lens links from LENS_PATHS
+  - src/routes/paths.ts
+  - src/shell/LeftRail.test.tsx
+  - src/shell/LeftRail.tsx

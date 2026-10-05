@@ -13,4 +13,6 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-05 `3edf712` — fix(ap/client): strip java.lang.Exception and java.lang.Error prefixes
+  - src/ap/client.test.ts
+  - src/ap/client.ts

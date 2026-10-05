@@ -67,11 +67,13 @@ export interface RawCellSet {
   cells: RawCell[];
 }
 
-// "[400] com.x.MdxException: Unknown hierarchy" -> "Unknown hierarchy". Never returns "".
+// "[400] com.x.MdxException: Unknown member: [A].[B]" -> "Unknown member: [A].[B]". Strips only the [NNN]
+// code and a leading Java class (dotted name ending in Exception/Error); other colons are content. Never "".
+// Repeatable: cause chains stack prefixes ("a.XException: b.YException: msg").
+const JAVA_CLASS_PREFIX = /^(?:(?:[A-Za-z_$][\w$]*\.)+[A-Za-z_$][\w$]*(?:Exception|Error):\s+)+/;
 function trimMessage(raw: string): string {
   const noCode = raw.replace(/^\[\d+\]\s*/, "");
-  const i = noCode.lastIndexOf(": ");
-  const tail = i >= 0 ? noCode.slice(i + 2).trim() : noCode.trim();
+  const tail = noCode.replace(JAVA_CLASS_PREFIX, "").trim();
   return tail || noCode.trim() || raw.trim();
 }
 

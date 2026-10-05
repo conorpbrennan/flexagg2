@@ -13,6 +13,8 @@
 - server/tests/test_views_api.py
 - server/tests/test_views_store.py
 - server/views_store.py
+- src/ap/client.test.ts
+- src/ap/client.ts
 - src/api/hooks.test.tsx
 - src/api/hooks.ts
 - src/api/stream.test.ts
@@ -37,6 +39,11 @@
 - src/routes/Pivot.tsx
 
 ## History
+
+- 2026-10-05 `bbcf962` — fix(ChartMode): chart queries carry the same Units context as the grid
+  - src/pivot/ChartMode.test.tsx
+  - src/pivot/ChartMode.tsx
+  - src/pivot/usePivot.ts
 
 - 2026-10-05 `dcd3907` — fix(views_store): store schema_version per view instead of stamping it on load
   - server/tests/test_views_api.py

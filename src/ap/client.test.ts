@@ -70,6 +70,45 @@ describe("ap client", () => {
     expect(err.chain).toEqual(["Unknown hierarchy [Foo]", "second"]);
   });
 
+  it("keeps everything after the Java class prefix, colons included", async () => {
+    mockFetch(json({ errorChain: [
+      { message: "[400] com.x.MdxException: Unknown member: [Positions].[Manager].[ALL].[AllMember].[X]" },
+      { message: "plain: kept whole" },
+      { message: "[500] java.lang.IllegalStateException: boom" },
+    ] }, 400));
+    const err = await apMdx("x").catch((e) => e);
+    expect(err.chain).toEqual([
+      "Unknown member: [Positions].[Manager].[ALL].[AllMember].[X]",
+      "plain: kept whole",
+      "boom",
+    ]);
+  });
+
+  it("strips stacked Java class prefixes (cause chains), keeping later colons", async () => {
+    mockFetch(json({ errorChain: [
+      { message: "[400] a.XException: b.YException: msg" },
+      { message: "[400] a.XException: b.YException: c.ZError: deep" },
+      { message: "[400] a.XException: b.YError: Unknown member: [X]" },
+    ] }, 400));
+    const err = await apMdx("x").catch((e) => e);
+    expect(err.chain).toEqual(["msg", "deep", "Unknown member: [X]"]);
+  });
+
+  it("prefix stripping is linear on adversarial input", async () => {
+    const evil = "[400] " + "a.".repeat(50000) + "!";
+    mockFetch(json({ errorChain: [{ message: evil }] }, 400));
+    const t = Date.now();
+    await apMdx("x").catch((e) => e);
+    expect(Date.now() - t).toBeLessThan(500);
+  });
+
+  it("an empty or absent errorChain becomes HTTP <status>", async () => {
+    mockFetch(json({ errorChain: [] }, 502));
+    expect((await apMdx("x").catch((e) => e)).message).toBe("HTTP 502");
+    mockFetch(json({}, 503));
+    expect((await apMdx("x").catch((e) => e)).message).toBe("HTTP 503");
+  });
+
   it("never trims a message to empty", async () => {
     mockFetch(json({ errorChain: [{ type: "X", message: "[400] a.b.C: " }] }, 400));
     const err = await apMdx("x").catch((e) => e);

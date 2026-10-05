@@ -13,4 +13,6 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-05 `5f9347b` — feat(FieldList): search the filter picker; render at most 200 members
+  - src/pivot/FieldList.test.tsx
+  - src/pivot/FieldList.tsx

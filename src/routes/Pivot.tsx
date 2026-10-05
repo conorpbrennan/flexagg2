@@ -110,8 +110,11 @@ export function Pivot() {
     // saved views carry no folded context (see currentState): take the CURRENT context for every
     // context level the view does not filter itself, and record it as folded so it stays the context's
     const ctx = contextFilters({ manager, date, scenario });
-    if (rows.includes(BINDINGS.scenarioSet) || cols.includes(BINDINGS.scenarioSet)) delete ctx[BINDINGS.scenarioSet];
+    const scenOnAxis = rows.includes(BINDINGS.scenarioSet) || cols.includes(BINDINGS.scenarioSet);
+    if (scenOnAxis) delete ctx[BINDINGS.scenarioSet];
     const filters: Record<string, string[]> = { ...(s.filters ?? cfg.filters) };
+    // the fallback cfg.filters may hold the folded ScenarioSet slice: it must not survive onto an axis
+    if (!s.filters && scenOnAxis) delete filters[BINDINGS.scenarioSet];
     for (const k of [BINDINGS.manager, BINDINGS.date, BINDINGS.scenarioSet]) {
       if (!filters[k] && ctx[k]) filters[k] = ctx[k];
     }

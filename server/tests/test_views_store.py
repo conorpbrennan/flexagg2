@@ -505,9 +505,27 @@ def test_concurrent_opener_altering_first_does_not_break_open(tmp_path, monkeypa
     with sqlite3.connect(db) as c:
         c.executescript(_OLD_SCHEMA)
 
+    fired = {"in_tx": 0, "out_tx": 0}
+
     def rival_alters_after_our_check(sql, conn):
-        # Force the race: right after this opener's column check, a second opener adds the column.
-        if sql.startswith("PRAGMA table_info") and not conn.in_transaction:
+        if not sql.startswith("PRAGMA table_info"):
+            return
+        if conn.in_transaction:
+            # Our check ran inside a transaction. Only BEGIN IMMEDIATE already holds the write lock
+            # here; a deferred BEGIN holds just a read lock, which lets a rival take the write lock
+            # and, in real concurrency, deadlocks the two upgrades ("database is locked").
+            fired["in_tx"] += 1
+            rival = real(db, isolation_level=None, timeout=0)
+            try:
+                with pytest.raises(
+                    sqlite3.OperationalError, match="database is locked"
+                ):
+                    rival.execute("BEGIN IMMEDIATE")
+            finally:
+                rival.close()
+        else:
+            # Force the race: right after this opener's column check, a second opener adds the column.
+            fired["out_tx"] += 1
             rival = real(db, isolation_level=None)
             rival.execute(
                 "ALTER TABLE views ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 2"
@@ -516,6 +534,10 @@ def test_concurrent_opener_altering_first_does_not_break_open(tmp_path, monkeypa
 
     real = _spy_on_connect(monkeypatch, rival_alters_after_our_check)
     s = ViewsStore(db)  # must not raise "duplicate column name"
+    assert fired["in_tx"] == 1, (
+        "the check must run inside a transaction that holds the write lock"
+    )
+    assert fired["out_tx"] == 0
     assert s.load("Public", "", "legacy")["schema_version"] == 2
     s.close()
 

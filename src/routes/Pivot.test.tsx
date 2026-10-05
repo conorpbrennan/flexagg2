@@ -20,6 +20,7 @@ vi.mock("ag-grid-react", () => ({
     </table>
   ),
 }));
+vi.mock("../pivot/ChartMode", () => ({ ChartMode: () => <div data-testid="chart-mode" /> }));
 vi.mock("../ap/pivotSource", async (orig) => ({ ...(await orig<typeof import("../ap/pivotSource")>()), fetchPivotLevel: vi.fn() }));
 
 import { Pivot } from "./Pivot";
@@ -53,6 +54,12 @@ const HHI_VIEW = {
            filters: { [MGR]: ["Soros"], [DATE]: ["2024-11-30"] }, row_tot: false, render: "grid" },
 };
 
+// a saved view with NO filters key that puts ScenarioSet on rows (falls back to the current filters)
+const NOFILT_VIEW = {
+  schema_version: 2, name: "Scenarios, no filters", path: "Public", created: "", updated: "",
+  state: { rows: [SCEN], cols: [], measures: ["Scenario VaR 99"], render: "grid" },
+};
+
 const rec = (k: string, v: string) => ({ [k]: v, [`${k}#label`]: v });
 let metaHangs = false;
 let savedBody: { state: Record<string, unknown> } | null = null; // last PUT /views/save body
@@ -79,20 +86,22 @@ beforeEach(() => {
     if (p.endsWith("/meta")) return metaHangs ? new Promise(() => {}) : json(META);
     if (p.endsWith("/views")) return json({ sections: { Public: { folders: {}, views: [
       ...(savedBody ? [{ name: "mine", slug: "mine", path: "Public", file: "Public/mine" }] : []),
-      { name: HHI_VIEW.name, slug: "concentration-hhi", path: "Public", file: "Public/concentration-hhi.json" }] },
+      { name: HHI_VIEW.name, slug: "concentration-hhi", path: "Public", file: "Public/concentration-hhi.json" },
+      { name: NOFILT_VIEW.name, slug: "nofilt", path: "Public", file: "Public/nofilt.json" }] },
       Private: { folders: {}, views: [] } } });
     if (p.endsWith("/views/save")) { savedBody = JSON.parse(init!.body as string); return json({ file: "Public/mine" }); }
     if (p.includes("/views/item/Public/mine")) return json({ ...HHI_VIEW, name: "mine", state: savedBody!.state });
+    if (p.includes("/views/item/Public/nofilt")) return json(NOFILT_VIEW);
     if (p.includes("/views/item/")) return json(HHI_VIEW);
     return json({});
   }) as unknown as typeof fetch);
 });
 
-function renderPivot(withBar = false) {
+function renderPivot(withBar = false, path = "/pivot") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/pivot"]}>
+      <MemoryRouter initialEntries={[path]}>
         <AppProvider>
           {withBar && <ContextBar />}
           <Pivot />
@@ -254,5 +263,147 @@ describe("Pivot — context and guards", () => {
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() => expect(savedBody).not.toBeNull());
     expect(savedBody!.state.filters).toEqual({ [DATE]: ["2024-11-30"] });
+  });
+
+  it("a saved view without filters never leaves ScenarioSet both on an axis and filtered", async () => {
+    renderPivot(true);
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    // the folded context filter is present before the load
+    expect(screen.getByText("ScenarioSet=HistFull")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Views"));
+    await waitFor(() => expect(screen.getByText(NOFILT_VIEW.name)).toBeInTheDocument());
+    const before = calls().length;
+    fireEvent.click(screen.getByText(NOFILT_VIEW.name));
+    await waitFor(() => expect(calls().length).toBeGreaterThan(before));
+    const last = calls()[calls().length - 1][0];
+    expect(last.rows).toEqual([SCEN]);
+    expect(last.filters[SCEN]).toBeUndefined();
+    // the other context levels still follow the context
+    expect(last.filters[DATE]).toEqual(["2024-12-31"]);
+    await waitFor(() => expect(screen.queryByText("ScenarioSet=HistFull")).not.toBeInTheDocument());
+  });
+});
+
+describe("Pivot — modes, panes and display options", () => {
+  it("toggles between grid and chart mode", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    expect(screen.queryByTestId("chart-mode")).toBeNull();
+    fireEvent.click(screen.getByText("Chart"));
+    expect(await screen.findByTestId("chart-mode")).toBeInTheDocument();
+    expect(screen.queryByText("Financials")).toBeNull();
+    fireEvent.click(screen.getByText("Grid"));
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+  });
+
+  it("the Views button opens the Repository and becomes Hide", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    expect(screen.queryByText("Repository")).toBeNull();
+    fireEvent.click(screen.getByText("Views"));
+    expect(await screen.findByText("Repository")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Hide"));
+    expect(screen.queryByText("Repository")).toBeNull();
+  });
+
+  it("a loaded view with no description says so, and the pane can be dismissed", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Views"));
+    await waitFor(() => expect(screen.getByText(HHI_VIEW.name)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(HHI_VIEW.name));
+    expect(await screen.findByText(`About this view · ${HHI_VIEW.name}`)).toBeInTheDocument();
+    expect(screen.getByText("No description saved for this view.")).toBeInTheDocument();
+    expect(document.title).toBe(`${HHI_VIEW.name} · pivot`);
+    fireEvent.click(screen.getByTitle("dismiss"));
+    expect(screen.queryByText(/About this view/)).toBeNull();
+  });
+
+  it("switching units from $ re-queries without the Units context filter; % formats weights", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    expect(lastFilters()[BINDINGS.units]).toEqual(["$"]);
+    const sel = screen.getByDisplayValue("$") as HTMLSelectElement;
+    const before = calls().length;
+    fireEvent.change(sel, { target: { value: "%" } });
+    await waitFor(() => expect(calls().length).toBeGreaterThan(before));
+    expect(lastFilters()[BINDINGS.units]).toBeUndefined();
+    expect((screen.getByDisplayValue("%") as HTMLSelectElement).value).toBe("%");
+    // fraction vs % is only a format of the same numbers: no further query
+    const n = calls().length;
+    fireEvent.change(screen.getByDisplayValue("%"), { target: { value: "fraction" } });
+    expect((screen.getByDisplayValue("fraction") as HTMLSelectElement).value).toBe("fraction");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(calls().length).toBe(n);
+  });
+
+  it("the total-row checkbox re-queries; the total-column checkbox is disabled without a column field", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    expect(screen.getByLabelText(/total column/)).toBeDisabled();
+    expect(calls()[calls().length - 1][0].totals).toBe(true);
+    const before = calls().length;
+    fireEvent.click(screen.getByLabelText(/total row/));
+    await waitFor(() => expect(calls().length).toBeGreaterThan(before));
+    expect(calls()[calls().length - 1][0].totals).toBe(false);
+  });
+
+  it("decimals are clamped to 0..6 and heat/hide-empty toggle without a query", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    const dec = screen.getByLabelText(/decimals/) as HTMLInputElement;
+    fireEvent.change(dec, { target: { value: "9" } });
+    expect(dec.value).toBe("6");
+    fireEvent.change(dec, { target: { value: "-3" } });
+    expect(dec.value).toBe("0");
+    const n = calls().length;
+    fireEvent.click(screen.getByLabelText(/heat/));
+    fireEvent.click(screen.getByLabelText(/hide empty/));
+    expect((screen.getByLabelText(/heat/) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/hide empty/) as HTMLInputElement).checked).toBe(false);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(calls().length).toBe(n);
+  });
+});
+
+describe("Pivot — cross-lens drill link", () => {
+  const drill = (o: object) => `/pivot?drill=${encodeURIComponent(JSON.stringify(o))}`;
+
+  it("opens the drill's rows/measures/filters once, names the pane, and clears ?drill=", async () => {
+    renderPivot(false, drill({
+      rows: [SCEN], measures: ["Scenario VaR 99"], filters: { [DATE]: ["2024-11-30"] }, description: "from attribution",
+    }));
+    expect(await screen.findByText("About this view · drill-through")).toBeInTheDocument();
+    expect(screen.getByText("from attribution")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Hypo:RiskOff")).toBeInTheDocument());
+    const a = calls()[calls().length - 1][0];
+    expect(a.rows).toEqual([SCEN]);
+    expect(a.measures).toEqual(["Scenario VaR 99"]);
+    expect(a.filters[DATE]).toEqual(["2024-11-30"]);
+    expect(calls().length).toBe(1);   // exactly one reload at mount: no race with the context fold
+  });
+
+  it("a drill with no description gets the default note; a malformed ?drill= is ignored", async () => {
+    renderPivot(false, drill({ rows: [SCEN] }));
+    expect(await screen.findByText("opened from another lens")).toBeInTheDocument();
+    renderPivot(false, "/pivot?drill=%7Bnot-json");
+    await waitFor(() => expect(screen.getAllByText("Financials").length).toBeGreaterThan(0));
+  });
+});
+
+describe("Pivot — loading a view with an unreadable store", () => {
+  it("a view that fails to open shows the error and leaves the grid alone", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    const orig = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) =>
+      String(url).includes("/views/item/")
+        ? { ok: false, status: 404, statusText: "", json: async () => ({ detail: "view not found" }) }
+        : orig(url, init)) as unknown as typeof fetch);
+    fireEvent.click(screen.getByText("Views"));
+    await waitFor(() => expect(screen.getByText(HHI_VIEW.name)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(HHI_VIEW.name));
+    expect(await screen.findByText("view not found")).toBeInTheDocument();
+    expect(screen.getByText("Financials")).toBeInTheDocument();
   });
 });

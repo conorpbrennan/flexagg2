@@ -114,8 +114,14 @@ describe("FieldList", () => {
   });
 
   it("a saved view with an empty member list for a filter does not crash the field list", () => {
-    setup({ ...cfg0, filters: { [COUNTRY]: [] } });
+    const setCfg = setup({ ...cfg0, filters: { [COUNTRY]: [] } });
     expect(screen.getByText("Fields")).toBeInTheDocument();
+    // caption-only chip: "Country", not "Country="
+    const chip = screen.getByText("Country", { selector: ".tag" });
+    expect(chip.textContent).toBe("Country×");
+    fireEvent.click(within(chip).getByTitle("remove"));
+    const upd = setCfg.mock.calls[0][0] as (c: PivotConfig) => PivotConfig;
+    expect(upd({ ...cfg0, filters: { [COUNTRY]: [] } }).filters).toEqual({});
   });
 
   it("a members failure is shown in the picker", async () => {

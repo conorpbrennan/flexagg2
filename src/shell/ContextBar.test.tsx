@@ -101,3 +101,40 @@ describe("ContextBar — manager control", () => {
     expect(bar().queryByText("N/A")).toBeNull();
   });
 });
+
+describe("ContextBar — other controls", () => {
+  it("a single manager with an entity name but no firm type shows just the entity name", async () => {
+    const { bar } = renderBar([{ ...SOROS_ONLY[0], entity_name: "SOROS FUND MANAGEMENT LLC" }]);
+    await waitFor(() => expect(bar().getByText("SOROS FUND MANAGEMENT LLC")).toBeInTheDocument());
+  });
+
+  it("an option without an entity name is labelled by its bare manager code", async () => {
+    const { bar } = renderBar([TWO_MANAGERS[0], { ...TWO_MANAGERS[1], entity_name: null }]);
+    await waitFor(() => expect(bar().getAllByRole("combobox").length).toBe(3));
+    const sel = bar().getAllByRole("combobox").find((s) => (s as HTMLSelectElement).value === "Soros") as HTMLSelectElement;
+    expect([...sel.options].map((o) => o.textContent)).toEqual(["SOROS FUND MANAGEMENT LLC · hedge_fund", "TigerGlobal"]);
+  });
+
+  it("the As-of and Scenario selects list /meta values with the defaults selected (latest date, HistFull)", async () => {
+    const { bar } = renderBar(SOROS_ONLY);
+    await waitFor(() => expect(bar().getByDisplayValue("2026-06-30")).toBeInTheDocument());
+    expect((bar().getByDisplayValue("HistFull") as HTMLSelectElement).value).toBe("HistFull");
+  });
+
+  it("the Docs button toggles a menu of the two static documents, and leaving the menu closes it", async () => {
+    const { bar, container } = renderBar(SOROS_ONLY);
+    expect(bar().queryByText("Dashboard guide")).toBeNull();
+    fireEvent.click(bar().getByText(/Docs/));
+    const a = bar().getByText("Dashboard guide") as HTMLAnchorElement;
+    expect(a.getAttribute("href")).toBe("/flexagg++/app/static/guide.html");
+    expect(a.target).toBe("_blank");
+    expect((bar().getByText("Model & data reference") as HTMLAnchorElement).getAttribute("href"))
+      .toBe("/flexagg++/app/static/barra_model_reference.html");
+    fireEvent.mouseLeave(a.parentElement!);
+    expect(bar().queryByText("Dashboard guide")).toBeNull();
+    fireEvent.click(bar().getByText(/Docs/));
+    fireEvent.click(bar().getByText(/Docs/));
+    expect(bar().queryByText("Dashboard guide")).toBeNull();
+    expect(container.querySelector(".title")!.textContent).toBe("Factor risk");
+  });
+});

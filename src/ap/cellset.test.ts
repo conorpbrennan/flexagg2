@@ -147,6 +147,23 @@ describe("cellsetToRecords, errors", () => {
       `path too short for ${SECTOR}`,
     );
   });
+  it("throws when rows are asked for but the cellset has no rows axis", () => {
+    const cs = { ...rowsCs, axes: rowsCs.axes.filter((a) => a.id !== 1) } as RawCellSet;
+    expect(() => cellsetToRecords(cs, q({ rows: [COUNTRY] }))).toThrow("no rows axis in cellset");
+  });
+  it("throws when the cellset has no columns axis", () => {
+    const cs = { ...rowsCs, axes: rowsCs.axes.filter((a) => a.id !== 0) } as RawCellSet;
+    expect(() => cellsetToRecords(cs, q({ rows: [COUNTRY, SECTOR] }))).toThrow("no columns axis in cellset");
+  });
+  it("throws on an axis hierarchy without dimension and hierarchy names", () => {
+    const cs = {
+      ...rowsCs,
+      axes: rowsCs.axes.map((a) => (a.id === 1 ? { ...a, hierarchies: [{ levelNames: [] }] } : a)),
+    } as unknown as RawCellSet;
+    expect(() => cellsetToRecords(cs, q({ rows: [COUNTRY, SECTOR] }))).toThrow(
+      "axis hierarchy without dimension and hierarchy names",
+    );
+  });
   it("throws on a measure q did not ask for", () => {
     expect(() => cellsetToRecords(rowsCs, q({ rows: [SECTOR], measures: ["Net exposure"] }))).toThrow(
       "unexpected measure: Scenario VaR 99",

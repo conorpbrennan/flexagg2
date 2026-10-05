@@ -65,5 +65,6 @@ describe("levelKey / parseLevelKey", () => {
     expect(() => parseLevelKey("[a].[b]")).toThrow();
     expect(() => parseLevelKey("a.b.c")).toThrow();
     expect(() => parseLevelKey("[a].[b].[c]x")).toThrow();
+    expect(() => parseLevelKey("[a].[b].[c")).toThrow("bad level key: [a].[b].[c");  // unterminated part
   });
 });

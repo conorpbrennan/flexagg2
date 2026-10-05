@@ -15,8 +15,11 @@
 - server/views_store.py
 - src/App.test.tsx
 - src/App.tsx
+- src/ap/cellset.test.ts
 - src/ap/client.test.ts
 - src/ap/client.ts
+- src/ap/discovery.test.ts
+- src/api/client.test.ts
 - src/api/hooks.test.tsx
 - src/api/hooks.ts
 - src/api/stream.test.ts
@@ -29,12 +32,15 @@
 - src/components/StreamPanel.tsx
 - src/components/svg.test.tsx
 - src/components/svg.tsx
+- src/components/ui.test.tsx
 - src/context/AppContext.test.tsx
 - src/context/AppContext.tsx
+- src/lib/format.test.ts
 - src/pivot/ChartMode.test.tsx
 - src/pivot/ChartMode.tsx
 - src/pivot/FieldList.test.tsx
 - src/pivot/FieldList.tsx
+- src/pivot/PivotGrid.render.test.tsx
 - src/pivot/Repository.test.tsx
 - src/pivot/Repository.tsx
 - src/pivot/usePivot.test.ts
@@ -42,8 +48,16 @@
 - src/routes/Pivot.test.tsx
 - src/routes/Pivot.tsx
 - src/routes/paths.ts
+- src/shell/ContextBar.test.tsx
 
 ## History
+
+- 2026-10-05 `cccd933` — fix(AppContext): / and unknown paths redirect to /pivot again
+  - src/App.test.tsx
+  - src/App.tsx
+  - src/context/AppContext.test.tsx
+  - src/context/AppContext.tsx
+  - src/routes/paths.ts
 
 - 2026-10-05 `7586e09` — fix(ap/client): keep the meaning of ActivePivot error messages
   - src/ap/client.test.ts

@@ -123,4 +123,94 @@ describe("Repository", () => {
       name: "mine", folder: "Public", state: { rows: [COUNTRY], measures: [MEASURE] },
     });
   });
+
+  it("refuses to save without a name and sends nothing", async () => {
+    render(<Repository currentState={cur} onLoad={() => {}} />);
+    await screen.findByText("v");
+    fireEvent.change(screen.getByPlaceholderText("view name"), { target: { value: "   " } });
+    fireEvent.click(screen.getByText("Save"));
+    expect(await screen.findByText("name the view")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((c) => c[0] === "/views-api/views/save")).toBe(false);
+  });
+
+  it("the form description wins over the current state's description, trimmed", async () => {
+    render(<Repository currentState={{ ...cur, description: "old" }} onLoad={() => {}} />);
+    await screen.findByText("v");
+    fireEvent.change(screen.getByPlaceholderText("view name"), { target: { value: " mine " } });
+    fireEvent.change(screen.getByPlaceholderText(/description/), { target: { value: " new text " } });
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => c[0] === "/views-api/views/save")).toBe(true));
+    const call = fetchMock.mock.calls.find((c) => c[0] === "/views-api/views/save")!;
+    const sent = JSON.parse((call[1] as RequestInit).body as string);
+    expect(sent.name).toBe("mine");
+    expect(sent.state.description).toBe("new text");
+  });
+
+  it("shows the server's message when a save fails", async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/views/save")) {
+        return { ok: false, status: 409, statusText: "", json: async () => ({ detail: "name taken" }) };
+      }
+      const body = url.endsWith("/views") && !init ? TREE : {};
+      return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) };
+    });
+    render(<Repository currentState={cur} onLoad={() => {}} />);
+    await screen.findByText("v");
+    fireEvent.change(screen.getByPlaceholderText("view name"), { target: { value: "mine" } });
+    fireEvent.click(screen.getByText("Save"));
+    expect(await screen.findByText("name taken")).toBeInTheDocument();
+  });
+
+  it("deleting a view sends DELETE for its file and re-lists", async () => {
+    render(<Repository currentState={cur} onLoad={() => {}} />);
+    await screen.findByText("v");
+    fireEvent.click(screen.getByText("×"));
+    await waitFor(() => {
+      const del = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "DELETE");
+      expect(del?.[0]).toBe("/views-api/views/item/Public/Risk/v");
+    });
+    await waitFor(() => {
+      const lists = fetchMock.mock.calls.filter((c) => c[0] === "/views-api/views" && !c[1]);
+      expect(lists.length).toBe(2);
+    });
+  });
+
+  it("shows the error when deleting fails", async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") {
+        return { ok: false, status: 500, statusText: "", json: async () => ({ detail: "disk full" }) };
+      }
+      const body = url.endsWith("/views") ? TREE : {};
+      return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) };
+    });
+    render(<Repository currentState={cur} onLoad={() => {}} />);
+    await screen.findByText("v");
+    fireEvent.click(screen.getByText("×"));
+    expect(await screen.findByText("disk full")).toBeInTheDocument();
+  });
+
+  it("shows the error when the list cannot be loaded", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: false, status: 500, statusText: "", json: async () => ({ detail: "store down" }),
+    }));
+    render(<Repository currentState={cur} onLoad={() => {}} />);
+    expect(await screen.findByText("store down")).toBeInTheDocument();
+  });
+
+  it("an empty store shows 'empty' and offers Public and Private folders", async () => {
+    fetchMock.mockImplementation(async () => {
+      const body = { sections: { Public: { folders: {}, views: [] } } };
+      return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) };
+    });
+    render(<Repository currentState={cur} onLoad={() => {}} />);
+    expect(await screen.findByText("empty")).toBeInTheDocument();
+    expect([...screen.getByRole("combobox").querySelectorAll("option")].map((o) => o.textContent)).toEqual(["Public"]);
+  });
+
+  it("lists every nested folder as a save target", async () => {
+    render(<Repository currentState={cur} onLoad={() => {}} />);
+    await screen.findByText("v");
+    const opts = [...screen.getByRole("combobox").querySelectorAll("option")].map((o) => o.textContent);
+    expect(opts).toEqual(["Public", "Public/Risk", "Private"]);
+  });
 });

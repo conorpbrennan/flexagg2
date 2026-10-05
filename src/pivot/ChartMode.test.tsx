@@ -159,4 +159,34 @@ describe("ChartMode — units context matches the grid", () => {
     await waitFor(() => expect(screen.getAllByTestId("vega")).toHaveLength(2));
     for (const c of vi.mocked(fetchPivotLevel).mock.calls) expect(c[0].filters[BINDINGS.units]).toEqual(["$"]);
   });
+
+  // Toggling units must re-query (units is in both effects' deps), and each re-query must carry the new context.
+  it("builder re-queries on each units toggle; Units $ only under dollar", async () => {
+    const f = vi.mocked(fetchPivotLevel);
+    const last = () => f.mock.calls[f.mock.calls.length - 1][0].filters;
+    const { rerender } = render(<ChartMode cfg={dollar} model={model} rules={rules} />);
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(1));
+    expect(last()[BINDINGS.units]).toEqual(["$"]);
+    rerender(<ChartMode cfg={{ ...dollar, units: "weight" }} model={model} rules={rules} />);
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(2));
+    expect(BINDINGS.units in last()).toBe(false);
+    rerender(<ChartMode cfg={dollar} model={model} rules={rules} />);
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(3));
+    expect(last()[BINDINGS.units]).toEqual(["$"]);
+  });
+
+  it("saved chart re-queries every named query on each units toggle", async () => {
+    const f = vi.mocked(fetchPivotLevel);
+    const lastN = () => f.mock.calls.slice(-QUERIES.length).map((c) => c[0].filters);
+    const props = { model, rules, savedQueries: QUERIES, savedChart: CHART };
+    const { rerender } = render(<ChartMode cfg={dollar} {...props} />);
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(2));
+    for (const fl of lastN()) expect(fl[BINDINGS.units]).toEqual(["$"]);
+    rerender(<ChartMode cfg={{ ...dollar, units: "weight" }} {...props} />);
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(4));
+    for (const fl of lastN()) expect(BINDINGS.units in fl).toBe(false);
+    rerender(<ChartMode cfg={dollar} {...props} />);
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(6));
+    for (const fl of lastN()) expect(fl[BINDINGS.units]).toEqual(["$"]);
+  });
 });

@@ -210,3 +210,167 @@ describe("usePivot drill", () => {
     expect(a.filters[COUNTRY]).toBeUndefined();
   });
 });
+
+function deferred<T>() {
+  let resolve!: (v: T) => void, reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+describe("usePivot stale responses (sequence + abort)", () => {
+  it("two reloads where the first resolves last: rows, grand and warning are the second's", async () => {
+    const a = deferred<PivotResult>(), b = deferred<PivotResult>();
+    mockFetch.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
+    const { result: h } = withSrc({ ...initial, totals: true });
+    let pa!: Promise<void>, pb!: Promise<void>;
+    act(() => { pa = h.current.reload(); pb = h.current.reload(); });
+    await act(async () => { b.resolve(result([rec(COUNTRY, "BBB", 2)], { grand: { [NE]: 22 }, warning: "warn-B" })); await pb; });
+    await act(async () => { a.resolve(result([rec(COUNTRY, "AAA", 1)], { grand: { [NE]: 11 }, warning: "warn-A" })); await pa; });
+    expect(h.current.flat.map((x) => x.label)).toEqual(["BBB"]);
+    expect(h.current.grand[`${COL_SEP}${NE}`]).toBe(22);
+    expect(h.current.warning).toBe("warn-B");
+    expect(h.current.loading).toBe(false);
+  });
+
+  it("an expand that resolves after a reload does not write into the new tree", async () => {
+    mockFetch.mockResolvedValueOnce(result([rec(COUNTRY, "UK", 1)]));
+    const { result: h } = withSrc(initial);
+    await act(async () => { await h.current.reload(); });
+    const ex = deferred<PivotResult>();
+    mockFetch.mockReturnValueOnce(ex.promise);
+    let pe!: Promise<void>;
+    act(() => { pe = h.current.toggleExpand(h.current.flat[0]); });
+    mockFetch.mockResolvedValueOnce(result([rec(COUNTRY, "UK", 5)]));
+    await act(async () => { await h.current.reload(); });
+    await act(async () => {
+      ex.resolve(result([rec(COUNTRY, "UK", 1, { [SECTOR]: `UK${SEP}Energy`, [`${SECTOR}#label`]: "STALE" })]));
+      await pe;
+    });
+    expect(h.current.flat.map((x) => x.label)).toEqual(["UK"]);
+    expect(h.current.flat[0].expanded).toBe(false);
+  });
+
+  it("each reload aborts the previous in-flight request via the signal", async () => {
+    const a = deferred<PivotResult>();
+    mockFetch.mockReturnValueOnce(a.promise).mockResolvedValueOnce(result([rec(COUNTRY, "BBB", 2)]));
+    const { result: h } = withSrc(initial);
+    let pa!: Promise<void>;
+    act(() => { pa = h.current.reload(); });
+    const sig = mockFetch.mock.calls[0][3];
+    expect(sig).toBeInstanceOf(AbortSignal);
+    expect(sig!.aborted).toBe(false);
+    await act(async () => { await h.current.reload(); });
+    expect(sig!.aborted).toBe(true);
+    await act(async () => { a.resolve(result([])); await pa; });
+  });
+
+  it("an aborted request shows no error", async () => {
+    mockFetch.mockImplementationOnce((_a, _r, _b, signal) => new Promise((_res, rej) => {
+      signal?.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+    }));
+    mockFetch.mockResolvedValueOnce(result([rec(COUNTRY, "BBB", 2)]));
+    const { result: h } = withSrc(initial);
+    let pa!: Promise<void>;
+    act(() => { pa = h.current.reload(); });
+    await act(async () => { await h.current.reload(); await pa; });
+    expect(h.current.error).toBeNull();
+    expect(h.current.flat.map((x) => x.label)).toEqual(["BBB"]);
+    expect(h.current.loading).toBe(false);
+  });
+
+  it("a late rejection from a superseded reload does not surface as an error", async () => {
+    const a = deferred<PivotResult>();
+    mockFetch.mockReturnValueOnce(a.promise).mockResolvedValueOnce(result([rec(COUNTRY, "BBB", 2)]));
+    const { result: h } = withSrc(initial);
+    let pa!: Promise<void>;
+    act(() => { pa = h.current.reload(); });
+    await act(async () => { await h.current.reload(); });
+    await act(async () => { a.reject(new Error("late boom")); await pa; });
+    expect(h.current.error).toBeNull();
+  });
+});
+
+describe("usePivot drill uses the applied config", () => {
+  it("expanding after an unapplied cfg edit queries the applied rows, measures and filters", async () => {
+    mockFetch.mockResolvedValueOnce(result([rec(COUNTRY, "UK", 1)]));
+    const { result: h } = withSrc(initial);
+    await act(async () => { await h.current.reload(); });
+    const row = h.current.flat[0];
+    act(() => {
+      h.current.setCfg((c) => ({
+        ...c, rows: [SECTOR, COUNTRY, ISSUER], measures: ["Other measure"], filters: { [DATE]: ["2020-01-01"] },
+      }));
+    });
+    mockFetch.mockResolvedValueOnce(result([]));
+    await act(async () => { await h.current.toggleExpand(row); });
+    const a = mockFetch.mock.calls[1][0];
+    expect(a.rows).toEqual([COUNTRY, SECTOR]);
+    expect(a.measures).toEqual([NE]);
+    expect(a.filters).toEqual({ [DATE]: ["2026-06-30"], [COUNTRY]: ["UK"] });
+  });
+});
+
+describe("usePivot round-2 stale-work fixes", () => {
+  it("an invalid-config reload supersedes an older valid reload: its late result never commits", async () => {
+    const a = deferred<PivotResult>();
+    mockFetch.mockReturnValueOnce(a.promise);
+    const { result: h } = withSrc(initial);
+    let pa!: Promise<void>;
+    act(() => { pa = h.current.reload(); });
+    await act(async () => { await h.current.reload({ ...h.current.cfg, rows: [] }); });
+    expect(h.current.error).toBe("pick at least one row field and one measure");
+    expect(h.current.loading).toBe(false);
+    await act(async () => { a.resolve(result([rec(COUNTRY, "AAA", 1)])); await pa; });
+    expect(h.current.flat).toEqual([]);
+    expect(h.current.error).toBe("pick at least one row field and one measure");
+    expect(h.current.loading).toBe(false);
+  });
+
+  it("an invalid-config reload does not become the applied config for drills", async () => {
+    mockFetch.mockResolvedValueOnce(result([rec(COUNTRY, "UK", 1)]));
+    const { result: h } = withSrc(initial);
+    await act(async () => { await h.current.reload(); });
+    const row = h.current.flat[0];
+    await act(async () => { await h.current.reload({ ...h.current.cfg, rows: [] }); });
+    mockFetch.mockResolvedValueOnce(result([]));
+    await act(async () => { await h.current.toggleExpand(row); });
+    expect(mockFetch.mock.calls[1][0].rows).toEqual([COUNTRY, SECTOR]);
+  });
+
+  it("two overlapping expands: loading clears only when the last one finishes", async () => {
+    mockFetch.mockResolvedValueOnce(result([rec(COUNTRY, "UK", 1), rec(COUNTRY, "US", 2)]));
+    const { result: h } = withSrc(initial);
+    await act(async () => { await h.current.reload(); });
+    const [uk, us] = h.current.flat;
+    const e1 = deferred<PivotResult>(), e2 = deferred<PivotResult>();
+    mockFetch.mockReturnValueOnce(e1.promise).mockReturnValueOnce(e2.promise);
+    let p1!: Promise<void>, p2!: Promise<void>;
+    act(() => { p1 = h.current.toggleExpand(uk); p2 = h.current.toggleExpand(us); });
+    expect(h.current.loading).toBe(true);
+    await act(async () => { e1.resolve(result([])); await p1; });
+    expect(h.current.loading).toBe(true);
+    await act(async () => { e2.resolve(result([])); await p2; });
+    expect(h.current.loading).toBe(false);
+  });
+
+  it("an expand begun while a reload is pending is dropped when the reload commits, and does not clear the reload's spinner", async () => {
+    mockFetch.mockResolvedValueOnce(result([rec(COUNTRY, "UK", 1)]));
+    const { result: h } = withSrc(initial);
+    await act(async () => { await h.current.reload(); });
+    const row = h.current.flat[0];
+    const r2 = deferred<PivotResult>(), ex = deferred<PivotResult>();
+    mockFetch.mockReturnValueOnce(r2.promise).mockReturnValueOnce(ex.promise);
+    let pr!: Promise<void>, pe!: Promise<void>;
+    act(() => { pr = h.current.reload(); });
+    act(() => { pe = h.current.toggleExpand(row); });
+    await act(async () => {
+      ex.resolve(result([rec(COUNTRY, "UK", 1, { [SECTOR]: `UK${SEP}Energy`, [`${SECTOR}#label`]: "STALE" })]));
+      await pe;
+    });
+    expect(h.current.loading).toBe(true);   // the pending reload still owns the spinner
+    await act(async () => { r2.resolve(result([rec(COUNTRY, "UK", 5)])); await pr; });
+    expect(h.current.flat.map((x) => x.label)).toEqual(["UK"]);
+    expect(h.current.flat[0].expanded).toBe(false);
+    expect(h.current.loading).toBe(false);
+  });
+});

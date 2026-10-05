@@ -8,7 +8,7 @@
 // one row per top member. Expanding a row issues a fresh query for the NEXT row dim, filtered to the
 // parent's member path, and splices the returned children underneath (indented). Collapsing drops them.
 // Row/col/filter keys are level keys ("[dim].[hier].[level]"); a member is a path string (see mdx.ts).
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { PivotResult, Rec, SortItem } from "../api/types";
 import { BINDINGS, DEFAULT_ROWS } from "../ap/bindings";
 import { labelKey } from "../ap/cellset";
@@ -79,7 +79,7 @@ export function mergeFilters(base: Record<string, string[]>, path: Record<string
 
 async function queryLevel(
   cfg: PivotConfig, levelDims: string[], path: Record<string, string>, src: { model: CubeModel; rules: GuardRules },
-  totals: boolean,
+  totals: boolean, signal?: AbortSignal,
 ): Promise<PivotResult> {
   const colDim = cfg.cols[0];
   const filters = mergeFilters(cfg.filters, path);
@@ -91,7 +91,7 @@ async function queryLevel(
       rows: levelDims, cols: colDim ? [colDim] : [], measures: cfg.measures, filters,
       totals, rowTot: cfg.rowTot && !!colDim,
     }),
-    src.rules, BINDINGS,
+    src.rules, BINDINGS, signal,
   );
 }
 
@@ -205,18 +205,36 @@ export function usePivot(initial: Partial<PivotConfig>, src: PivotSrc) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Staleness control. `epoch` bumps when a reload starts and again when it commits, so a late
+  // reload or expand (even one whose fetch ignores abort) fails its check and never writes.
+  // `applied` is the config that produced the displayed rows: drills use it, not the live cfg.
+  const epoch = useRef(0);
+  const reloadSeq = useRef(0);
+  const inflight = useRef(new Set<AbortController>());
+  const applied = useRef<PivotConfig | null>(null);
+  const isAbort = (e: unknown) => (e as { name?: string } | null)?.name === "AbortError";
+
   // (re)load the base level + reset the tree. Called on Apply.
   const reload = useCallback(async (override?: PivotConfig) => {
     const c = override ?? cfg;
     if (!model || !rules) return;   // guard rules / cube shape not loaded: wait, never run unguarded
+    for (const ac of inflight.current) ac.abort();   // supersede the previous reload and any expands,
+    inflight.current.clear();                        // including when this config is invalid
+    const mine = ++epoch.current, seq = ++reloadSeq.current;
     if (!c.rows.length || !c.measures.length) {
+      setLoading(false);
       setError("pick at least one row field and one measure");
-      return;
+      return;                                        // never applied: `applied` keeps the shown grid's config
     }
+    const ac = new AbortController();
+    inflight.current.add(ac);
     setLoading(true); setError(null);
     try {
       // one fetch carries the level AND its cube-computed margins (per_row, per_col, grand)
-      const base = await queryLevel(c, [c.rows[0]], {}, { model, rules }, c.totals);
+      const base = await queryLevel(c, [c.rows[0]], {}, { model, rules }, c.totals, ac.signal);
+      if (epoch.current !== mine) return;   // superseded while in flight
+      epoch.current++;                       // commit: invalidates expands begun against the old grid
+      applied.current = c;
       const colDim = c.cols[0];
       const cms = colDim
         ? Array.from(new Set(base.records.map((r) => String(r[colDim] ?? "")))).filter(Boolean).sort()
@@ -256,15 +274,17 @@ export function usePivot(initial: Partial<PivotConfig>, src: PivotSrc) {
         setGrand(gr);
       } else setGrand({});
     } catch (e) {
-      setError((e as Error).message);
+      if (reloadSeq.current === seq && !isAbort(e)) setError((e as Error).message);
     } finally {
-      setLoading(false);
+      inflight.current.delete(ac);
+      if (reloadSeq.current === seq) setLoading(inflight.current.size > 0);   // expands may still be pending
     }
   }, [cfg, model, rules]);
 
   const toggleExpand = useCallback(async (row: DisplayRow) => {
-    if (row.level >= cfg.rows.length - 1) return;
-    if (!model || !rules) return;
+    const ac0 = applied.current;   // drill from the config that produced the rows, not unapplied edits
+    if (!ac0 || !model || !rules) return;
+    if (row.level >= ac0.rows.length - 1) return;
     if (tree[row.key]) {
       // collapse: drop children (and any deeper cached descendants stay cached but hidden)
       const flip = (rs: DisplayRow[]) => rs.map((r) => (r.key === row.key ? { ...r, expanded: false } : r));
@@ -277,22 +297,27 @@ export function usePivot(initial: Partial<PivotConfig>, src: PivotSrc) {
       });
       return;
     }
+    const mine = epoch.current;
+    const ac = new AbortController();
+    inflight.current.add(ac);
     setLoading(true);
     try {
-      const nextDim = cfg.rows[row.level + 1];
-      const res = await queryLevel(cfg, cfg.rows.slice(0, row.level + 2), row.path, { model, rules }, false);
-      const expandable = row.level + 1 < cfg.rows.length - 1;
-      const children = rowsFromRecords(res.records, nextDim, cfg.cols[0], cfg.measures,
+      const nextDim = ac0.rows[row.level + 1];
+      const res = await queryLevel(ac0, ac0.rows.slice(0, row.level + 2), row.path, { model, rules }, false, ac.signal);
+      if (epoch.current !== mine) return;   // a reload landed or started meanwhile
+      const expandable = row.level + 1 < ac0.rows.length - 1;
+      const children = rowsFromRecords(res.records, nextDim, ac0.cols[0], ac0.measures,
         row.level + 1, row.path, row.key, expandable, res.per_row);
       setTree((t) => ({ ...t, [row.key]: children }));
       const setExpanded = (rs: DisplayRow[]) => rs.map((r) => (r.key === row.key ? { ...r, expanded: true } : r));
       setTopRows((rs) => setExpanded(rs));
     } catch (e) {
-      setError((e as Error).message);
+      if (epoch.current === mine && !isAbort(e)) setError((e as Error).message);
     } finally {
-      setLoading(false);
+      inflight.current.delete(ac);
+      setLoading(inflight.current.size > 0);   // spinner stays while any expand or the pending reload remains
     }
-  }, [cfg, tree, model, rules]);
+  }, [tree, model, rules]);
 
   // flatten the expanded tree into the ordered list AG Grid renders: siblings sorted by the
   // view's sort at EVERY level (the drill indentation survives a sort), all-blank body rows

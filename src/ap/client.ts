@@ -69,8 +69,9 @@ export interface RawCellSet {
 
 // "[400] com.x.MdxException: Unknown member: [A].[B]" -> "Unknown member: [A].[B]". Strips only the [NNN]
 // code and a leading Java class (dotted name ending in Exception/Error); other colons are content. Never "".
-// Repeatable: cause chains stack prefixes ("a.XException: b.YException: msg").
-const JAVA_CLASS_PREFIX = /^(?:(?:[A-Za-z_$][\w$]*\.)+[A-Za-z_$][\w$]*(?:Exception|Error):\s+)+/;
+// Repeatable: cause chains stack prefixes ("a.XException: b.YException: msg"). The simple name may be
+// exactly "Exception" or "Error" (java.lang.Exception, java.lang.Error).
+const JAVA_CLASS_PREFIX = /^(?:(?:[A-Za-z_$][\w$]*\.)+(?:[A-Za-z_$][\w$]*)?(?:Exception|Error):\s+)+/;
 function trimMessage(raw: string): string {
   const noCode = raw.replace(/^\[\d+\]\s*/, "");
   const tail = noCode.replace(JAVA_CLASS_PREFIX, "").trim();

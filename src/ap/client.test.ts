@@ -94,6 +94,17 @@ describe("ap client", () => {
     expect(err.chain).toEqual(["msg", "deep", "Unknown member: [X]"]);
   });
 
+  it("strips a class named exactly Exception or Error, alone or in a cause chain", async () => {
+    mockFetch(json({ errorChain: [
+      { message: "[500] java.lang.Exception: x" },
+      { message: "[500] java.lang.Error: out of memory" },
+      { message: "[500] java.lang.RuntimeException: java.lang.Exception: nested" },
+      { message: "[400] a.b.NotAnException2: kept" },
+    ] }, 500));
+    const err = await apMdx("x").catch((e) => e);
+    expect(err.chain).toEqual(["x", "out of memory", "nested", "a.b.NotAnException2: kept"]);
+  });
+
   it("prefix stripping is linear on adversarial input", async () => {
     const evil = "[400] " + "a.".repeat(50000) + "!";
     mockFetch(json({ errorChain: [{ message: evil }] }, 400));

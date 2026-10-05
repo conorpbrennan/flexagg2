@@ -2,7 +2,7 @@
 // clicked into four zones that map straight to the pivot query — ROWS→rows, COLUMNS→cols,
 // VALUES→measures, FILTERS→filters. Field ids are level keys; filters store member paths. dnd-kit gives
 // drag-reorder of the ROWS zone (order IS the drill hierarchy). The guards (src/ap/guards.ts) own the rules.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent,
 } from "@dnd-kit/core";
@@ -198,6 +198,10 @@ export function FieldList({
   );
 }
 
+// Rows the picker renders at once. Position and Issuer have ~5,000 members; rendering them all is slow and
+// unreadable, so the list shows the first matches and the search narrows the rest.
+const MEMBER_CAP = 200;
+
 function FilterPicker({
   model, levelKey, title, selected, onChange, onClose,
 }: { model: CubeModel; levelKey: string; title: string; selected: string[]; onChange: (m: string[]) => void;
@@ -206,25 +210,40 @@ function FilterPicker({
   const mq = useQuery({
     queryKey: membersKey(levelKey), queryFn: () => fetchMembers(model, levelKey), staleTime: Infinity,
   });
-  const members = mq.data ?? [];
   const [sel, setSel] = useState<string[]>(selected);
+  const [q, setQ] = useState("");
   const toggle = (m: string) => setSel((s) => (s.includes(m) ? s.filter((x) => x !== m) : [...s, m]));
+  // ticks live in `sel`, not in the visible rows, so they survive a new search
+  const matches = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const all = mq.data ?? [];
+    return needle ? all.filter((m) => m.label.toLowerCase().includes(needle)) : all;
+  }, [mq.data, q]);
   return (
     <div style={{ border: "1px solid var(--line)", borderRadius: 2, padding: "0.5rem", margin: "0.4rem 0",
       background: "var(--bg)" }}>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: "0.3rem" }}>
         <b className="small">Filter {title}</b>
-        <button onClick={() => { onChange(sel); onClose(); }}>done</button>
+        <span className="row" style={{ gap: "0.4rem" }}>
+          {sel.length > 0 && <span className="muted small">{sel.length} selected</span>}
+          <button onClick={() => { onChange(sel); onClose(); }}>done</button>
+        </span>
       </div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="search members" autoFocus
+        style={{ width: "100%", boxSizing: "border-box", marginBottom: "0.2rem" }} />
       <div style={{ maxHeight: "10rem", overflowY: "auto" }}>
         {mq.isLoading && <div className="muted small">loading members…</div>}
         {mq.isError && <div className="err small">{(mq.error as Error).message}</div>}
-        {members.map((m) => (
+        {mq.isSuccess && matches.length === 0 && <div className="muted small">no member matches</div>}
+        {matches.slice(0, MEMBER_CAP).map((m) => (
           <label key={m.path} className="row small" style={{ gap: "0.3rem" }}>
             <input type="checkbox" checked={sel.includes(m.path)} onChange={() => toggle(m.path)} /> {m.label}
           </label>
         ))}
       </div>
+      {matches.length > MEMBER_CAP && (
+        <div className="muted small">{MEMBER_CAP} of {matches.length.toLocaleString("en-US")} shown; refine the search</div>
+      )}
     </div>
   );
 }

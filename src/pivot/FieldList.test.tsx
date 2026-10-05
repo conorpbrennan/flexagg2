@@ -124,6 +124,44 @@ describe("FieldList", () => {
     expect(upd({ ...cfg0, filters: { [COUNTRY]: [] } }).filters).toEqual({});
   });
 
+  it("the picker search narrows members by caption, ignoring case, and ticks survive a new search", async () => {
+    vi.mocked(fetchMembers).mockResolvedValue([
+      { path: "UK", label: "United Kingdom" },
+      { path: "US", label: "United States" },
+      { path: "DE", label: "Germany" },
+    ]);
+    const setCfg = setup();
+    fireEvent.click(within(screen.getByTestId("level-Country")).getByTitle("filter"));
+    await screen.findByLabelText("Germany");
+    const search = screen.getByPlaceholderText("search members");
+    fireEvent.change(search, { target: { value: "  STATES " } });
+    expect(screen.getAllByRole("checkbox").map((c) => c.parentElement!.textContent!.trim())).toEqual(["United States"]);
+    fireEvent.click(screen.getByLabelText("United States"));
+    fireEvent.change(search, { target: { value: "ger" } });
+    expect(screen.queryByLabelText("United States")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Germany"));
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "zz" } });
+    expect(screen.getByText("no member matches")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("done"));
+    const upd = setCfg.mock.calls[0][0] as (c: PivotConfig) => PivotConfig;
+    expect(upd(cfg0).filters).toEqual({ [COUNTRY]: ["US", "DE"] });
+  });
+
+  it("a long member list renders only the first 200 matches and says how many matched", async () => {
+    vi.mocked(fetchMembers).mockResolvedValue(
+      Array.from({ length: 5000 }, (_, i) => ({ path: `P${i}`, label: `Position ${i}` })));
+    setup();
+    fireEvent.click(within(screen.getByTestId("level-Country")).getByTitle("filter"));
+    await screen.findByLabelText("Position 0");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(200);
+    expect(screen.getByText("200 of 5,000 shown; refine the search")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("search members"), { target: { value: "position 4999" } });
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    expect(screen.getByLabelText("Position 4999")).toBeInTheDocument();
+    expect(screen.queryByText(/refine the search/)).toBeNull();
+  });
+
   it("a members failure is shown in the picker", async () => {
     vi.mocked(fetchMembers).mockRejectedValue(new Error("retrieval limit"));
     setup();

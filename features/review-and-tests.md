@@ -13,6 +13,8 @@
 - server/tests/test_views_api.py
 - server/tests/test_views_store.py
 - server/views_store.py
+- src/App.test.tsx
+- src/App.tsx
 - src/ap/client.test.ts
 - src/ap/client.ts
 - src/api/hooks.test.tsx
@@ -27,6 +29,8 @@
 - src/components/StreamPanel.tsx
 - src/components/svg.test.tsx
 - src/components/svg.tsx
+- src/context/AppContext.test.tsx
+- src/context/AppContext.tsx
 - src/pivot/ChartMode.test.tsx
 - src/pivot/ChartMode.tsx
 - src/pivot/FieldList.test.tsx
@@ -37,8 +41,13 @@
 - src/pivot/usePivot.ts
 - src/routes/Pivot.test.tsx
 - src/routes/Pivot.tsx
+- src/routes/paths.ts
 
 ## History
+
+- 2026-10-05 `7586e09` — fix(ap/client): keep the meaning of ActivePivot error messages
+  - src/ap/client.test.ts
+  - src/ap/client.ts
 
 - 2026-10-05 `bbcf962` — fix(ChartMode): chart queries carry the same Units context as the grid
   - src/pivot/ChartMode.test.tsx

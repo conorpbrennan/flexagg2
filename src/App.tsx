@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
 import { ContextBar } from "./shell/ContextBar";
 import { LeftRail } from "./shell/LeftRail";
+import { LENS_PATHS, DEFAULT_LENS } from "./routes/paths";
 // The pivot pulls AG Grid (+ Vega in chart mode) — code-split so the monitor loads light.
 const Pivot = lazy(() => import("./routes/Pivot").then((m) => ({ default: m.Pivot })));
 
@@ -15,9 +16,9 @@ export default function App() {
           <LeftRail />
           <Suspense fallback={<main className="lens"><div className="spin">loading…</div></main>}>
           <Routes>
-            <Route path="/" element={<Navigate to="/pivot" replace />} />
-            <Route path="/pivot" element={<Pivot />} />
-            <Route path="*" element={<Navigate to="/pivot" replace />} />
+            <Route path="/" element={<Navigate to={DEFAULT_LENS} replace />} />
+            {LENS_PATHS.map((p) => <Route key={p} path={p} element={<Pivot />} />)}
+            <Route path="*" element={<Navigate to={DEFAULT_LENS} replace />} />
           </Routes>
           </Suspense>
         </div>

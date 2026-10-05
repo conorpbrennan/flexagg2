@@ -2,9 +2,10 @@
 // single global context every lens inherits, instead of per-panel selectors. Defaults: latest
 // date, HistFull, Millennium. Persisted to the URL query so a view is shareable/bookmarkable.
 import { createContext, useContext, useMemo, useState, useEffect, ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { useMeta } from "../api/hooks";
 import type { Manager } from "../api/types";
+import { LENS_PATHS } from "../routes/paths";
 
 export interface AppCtx {
   manager: string;
@@ -25,6 +26,7 @@ const Ctx = createContext<AppCtx | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const { data: meta } = useMeta();
   const [params, setParams] = useSearchParams();
+  const { pathname } = useLocation();
 
   // ?book= is still read for backward compatibility with old links; ?manager= takes priority.
   const [manager, setManager] = useState(params.get("manager") || params.get("book") || "Millennium");
@@ -58,7 +60,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [managers, manager]);
 
   // reflect context into the URL (shareable), without stomping other params
+  // Only on a lens path (LENS_PATHS): setParams navigates relative to the pathname captured at render, so
+  // running on "/" or an unknown path would re-navigate there and undo the <Navigate> redirect
+  // (child effects run first). The effect re-runs once the redirect lands on /pivot.
   useEffect(() => {
+    if (!(LENS_PATHS as readonly string[]).includes(pathname)) return;
     const next = new URLSearchParams(params);
     next.set("manager", manager);
     next.delete("book"); // normalise any legacy ?book= link to ?manager= on first render
@@ -66,7 +72,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     next.set("set", scenario);
     setParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manager, date, scenario]);
+  }, [manager, date, scenario, pathname]);
 
   const value = useMemo<AppCtx>(
     () => ({

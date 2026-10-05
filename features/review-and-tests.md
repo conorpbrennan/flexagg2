@@ -52,6 +52,21 @@
 
 ## History
 
+- 2026-10-05 `24bb21d` — test: cover the untested frontend paths; fix ScenarioSet surviving on an axis
+  - server/tests/test_views_store.py
+  - src/ap/cellset.test.ts
+  - src/ap/discovery.test.ts
+  - src/api/client.test.ts
+  - src/components/ui.test.tsx
+  - src/lib/format.test.ts
+  - src/pivot/ChartMode.test.tsx
+  - src/pivot/FieldList.test.tsx
+  - src/pivot/PivotGrid.render.test.tsx
+  - src/pivot/Repository.test.tsx
+  - src/routes/Pivot.test.tsx
+  - src/routes/Pivot.tsx
+  - src/shell/ContextBar.test.tsx
+
 - 2026-10-05 `cccd933` — fix(AppContext): / and unknown paths redirect to /pivot again
   - src/App.test.tsx
   - src/App.tsx

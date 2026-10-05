@@ -4,7 +4,7 @@
 // MDX is sent. This proves the Pivot lens surfaces that message (not a generic "request failed") and that
 // the rejected query reaches ActivePivot not at all — driven end-to-end through a saved view, with the
 // real pivotSource and cellset adapter over a stubbed ActivePivot.
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { vi, describe, it, expect, beforeEach } from "vitest";
@@ -119,5 +119,29 @@ describe("Pivot — manager-independent measure rejection", () => {
     // ... and the rejected query never reached ActivePivot
     expect(mdxSent.length).toBe(before);
     expect(mdxSent.some((m) => m.includes("Factor contribution"))).toBe(false);
+  });
+
+  it("shows the refusal live while editing the zones, then hands it to the page line on Apply, sending no MDX", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    const before = mdxSent.length;
+    expect(screen.queryByTestId("guard-preview")).toBeNull();
+
+    const row = within(screen.getByTestId("measures")).getAllByTestId("measure")
+      .find((e) => e.textContent?.startsWith("Factor contribution"))!;
+    fireEvent.click(within(row).getByTitle("to values"));
+    const line = screen.getByTestId("guard-preview");
+    expect(line.textContent).toMatch(new RegExp(REJECTION_PREFIX.replace(/[[\]]/g, "\\$&")));
+    expect(line.className).toMatch(/\berr\b/);
+
+    // Apply runs the same check: the page line shows it, the field list stops repeating it, no MDX goes out
+    fireEvent.click(screen.getByText("Apply"));
+    await waitFor(() => expect(screen.getAllByText(new RegExp(REJECTION_TAIL))).toHaveLength(1));
+    expect(screen.queryByTestId("guard-preview")).toBeNull();
+    expect(mdxSent.length).toBe(before);
+
+    // removing the measure clears the live line; the page line stays until the next Apply
+    fireEvent.click(within(screen.getByText("Factor contribution", { selector: ".tag" })).getByTitle("remove"));
+    expect(screen.queryByTestId("guard-preview")).toBeNull();
   });
 });

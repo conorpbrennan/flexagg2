@@ -50,13 +50,10 @@ export async function fetchMembers(
   return recs.map((r) => ({ path: String(r[levelKey]), label: String(r[labelKey(levelKey)]) }));
 }
 
-export async function fetchPivotLevel(
-  args: PivotArgs,
-  rules: GuardRules,
-  bind: Bindings,
-  signal?: AbortSignal,
-): Promise<PivotResult> {
-  const base: ApQuery = {
+// The query a pivot level sends, before the guards. Shared with the live guard preview (usePivot's
+// guardPreview), so the preview checks exactly what Apply will.
+export function toApQuery(args: PivotArgs): ApQuery {
+  return {
     cube: args.cube,
     rows: args.rows,
     cols: args.cols,
@@ -66,7 +63,15 @@ export async function fetchPivotLevel(
     slicing: args.slicing,
     depth: args.depth,
   };
-  const checked = checkQuery(base, rules, bind);
+}
+
+export async function fetchPivotLevel(
+  args: PivotArgs,
+  rules: GuardRules,
+  bind: Bindings,
+  signal?: AbortSignal,
+): Promise<PivotResult> {
+  const checked = checkQuery(toApQuery(args), rules, bind);
   if (!checked.ok) throw new ApError(400, checked.error);
   const q = checked.q; // may carry the added Date filter; every margin query below shares it
 

@@ -14,8 +14,8 @@ import { BINDINGS, DEFAULT_ROWS } from "../ap/bindings";
 import { labelKey } from "../ap/cellset";
 import type { CubeModel } from "../ap/discovery";
 import { parseLevelKey } from "../ap/discovery";
-import type { GuardRules } from "../ap/guards";
-import { fetchPivotLevel, makeArgs } from "../ap/pivotSource";
+import { checkQuery, type GuardResult, type GuardRules } from "../ap/guards";
+import { fetchPivotLevel, makeArgs, toApQuery, type PivotArgs } from "../ap/pivotSource";
 
 export const COL_SEP = "␟"; // separates colMember from measure in a value key
 export const TOTAL_COL = "Total"; // the col member carrying the per-row cube margin (Total column)
@@ -83,21 +83,38 @@ export function withUnits(filters: Record<string, string[]>, units: PivotConfig[
   return units === "dollar" ? { ...filters, [BINDINGS.units]: ["$"] } : filters;
 }
 
-async function queryLevel(
-  cfg: PivotConfig, levelDims: string[], path: Record<string, string>, src: { model: CubeModel; rules: GuardRules },
-  totals: boolean, signal?: AbortSignal,
-): Promise<PivotResult> {
+function levelArgs(
+  cfg: PivotConfig, levelDims: string[], path: Record<string, string>, model: CubeModel, totals: boolean,
+): PivotArgs {
   const colDim = cfg.cols[0];
   const filters = withUnits(mergeFilters(cfg.filters, path), cfg.units);
   // the Total column is the cube's per_row margin at THIS level (rows = the row dims), so it is
   // requested with the level query itself — never summed client-side (VaR is non-additive)
-  return fetchPivotLevel(
-    makeArgs(src.model, {
-      rows: levelDims, cols: colDim ? [colDim] : [], measures: cfg.measures, filters,
-      totals, rowTot: cfg.rowTot && !!colDim,
-    }),
-    src.rules, BINDINGS, signal,
-  );
+  return makeArgs(model, {
+    rows: levelDims, cols: colDim ? [colDim] : [], measures: cfg.measures, filters,
+    totals, rowTot: cfg.rowTot && !!colDim,
+  });
+}
+
+async function queryLevel(
+  cfg: PivotConfig, levelDims: string[], path: Record<string, string>, src: { model: CubeModel; rules: GuardRules },
+  totals: boolean, signal?: AbortSignal,
+): Promise<PivotResult> {
+  return fetchPivotLevel(levelArgs(cfg, levelDims, path, src.model, totals), src.rules, BINDINGS, signal);
+}
+
+// The guard check Apply would run on this config: the base level reload() sends (first row field, no drill
+// path), so the field list can show a refusal or notice while the zones are edited. null when there is
+// nothing to check: no model or rules yet, or a config reload() rejects before querying. Never throws: it runs
+// during render, and checkQuery throws on a malformed level key (a drill link or saved view can carry one),
+// so a throw becomes the refusal Apply would show (reload() reports the same message).
+export function guardPreview(cfg: PivotConfig, model: CubeModel | null, rules: GuardRules | null): GuardResult | null {
+  if (!model || !rules || !cfg.rows.length || !cfg.measures.length) return null;
+  try {
+    return checkQuery(toApQuery(levelArgs(cfg, [cfg.rows[0]], {}, model, cfg.totals)), rules, BINDINGS);
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 }
 
 // ---- sort: Streamlit colId <-> grid value key -------------------------------------------------

@@ -4,7 +4,7 @@
 // cfg; the fix passes the new config explicitly to reload(next). This test drives the real component
 // with AG Grid mocked to a plain table, discovery/dims/meta stubbed on fetch and fetchPivotLevel
 // mocked, and asserts the grid re-queries + re-renders with the loaded view's rows on the FIRST load.
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { vi, describe, it, expect, beforeEach } from "vitest";
@@ -233,6 +233,30 @@ describe("Pivot — context and guards", () => {
     expect(fetchPivotLevel).not.toHaveBeenCalled();
   });
 
+  it("shows a guard refusal live while editing, before Apply, with no query", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    expect(screen.queryByTestId("guard-preview")).toBeNull();   // the shown grid's config passes
+    // drop the context's ScenarioSet filter while a scenario measure is in Values
+    const chip = screen.getByText(/^ScenarioSet=/, { selector: ".tag" });
+    expect(queriesDuring(() => fireEvent.click(within(chip).getByTitle("remove")))).toBe(0);
+    expect(screen.getByTestId("guard-preview").textContent).toMatch(/need one ScenarioSet/);
+    expect(screen.getByTestId("guard-preview").className).toMatch(/\berr\b/);
+    // Apply's half (the page line takes over) is in Pivot.rejection.test.tsx: here fetchPivotLevel is mocked
+  });
+
+  it("shows a guard notice live, in amber, for an edit Apply would run with a default", async () => {
+    renderPivot();
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    // Manager as the first row field with a scenario measure and no Date: Apply defaults to the latest date
+    fireEvent.click(within(screen.getByText(/^Date=/, { selector: ".tag" })).getByTitle("remove"));
+    fireEvent.click(within(screen.getByText(/FactorGroup/, { selector: ".tag" })).getByTitle("remove"));
+    fireEvent.click(within(screen.getByTestId("level-Manager")).getByTitle("to rows"));
+    const line = screen.getByTestId("guard-preview");
+    expect(line.textContent).toMatch(/Defaulted to the latest date/);
+    expect(line.className).toMatch(/rag-amber/);
+  });
+
   it("has no what-if bar and no commentary panel", async () => {
     renderPivot();
     await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
@@ -374,6 +398,12 @@ describe("Pivot — modes, panes and display options", () => {
 
 describe("Pivot — cross-lens drill link", () => {
   const drill = (o: object) => `/pivot?drill=${encodeURIComponent(JSON.stringify(o))}`;
+
+  it("a drill link with a malformed level key shows an error instead of crashing the page", async () => {
+    renderPivot(false, drill({ rows: ["Manager"] }));   // keeps the default scenario measure
+    expect(await screen.findByText(/bad level key: Manager/)).toBeInTheDocument();
+    expect(screen.getByText("Fields")).toBeInTheDocument();
+  });
 
   it("opens the drill's rows/measures/filters once, names the pane, and clears ?drill=", async () => {
     renderPivot(false, drill({

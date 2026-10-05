@@ -10,7 +10,7 @@ import { rulesFromDims } from "../ap/guards";
 import { toCubeModel } from "../ap/discovery";
 import type { RawDiscovery } from "../ap/client";
 import fixture from "../ap/__fixtures__/discovery.json";
-import { rowsFromRecords, mergeFilters, usePivot, COL_SEP, TOTAL_COL, type PivotConfig } from "./usePivot";
+import { rowsFromRecords, mergeFilters, usePivot, guardPreview, COL_SEP, TOTAL_COL, type PivotConfig } from "./usePivot";
 
 const SEP = "␞";
 const COUNTRY = "[Securities].[Security].[Country]";
@@ -372,5 +372,51 @@ describe("usePivot round-2 stale-work fixes", () => {
     expect(h.current.flat.map((x) => x.label)).toEqual(["UK"]);
     expect(h.current.flat[0].expanded).toBe(false);
     expect(h.current.loading).toBe(false);
+  });
+});
+
+describe("guardPreview: the guard check Apply would run, on the edited config", () => {
+  const MGR = "[Positions].[Manager].[Manager]";
+  const VAR = "Scenario VaR 99";
+  const base: PivotConfig = {
+    rows: [FG], cols: [], measures: [NE], filters: {}, totals: true, rowTot: false, hideEmpty: true,
+    heat: true, asPct: false, prec: 3, sort: [], units: "dollar",
+  };
+
+  it("is null until the model and the guard rules have loaded, and for a config Apply would not send", () => {
+    expect(guardPreview(base, null, rules)).toBeNull();
+    expect(guardPreview(base, model, null)).toBeNull();
+    expect(guardPreview({ ...base, rows: [] }, model, rules)).toBeNull();
+    expect(guardPreview({ ...base, measures: [] }, model, rules)).toBeNull();
+  });
+
+  it("passes a safe config with no notice", () => {
+    expect(guardPreview(base, model, rules)).toMatchObject({ ok: true, notice: null });
+  });
+
+  it("refuses a scenario measure with no single ScenarioSet", () => {
+    const r = guardPreview({ ...base, measures: [VAR] }, model, rules);
+    expect(r).toEqual({ ok: false, error: expect.stringMatching(/need one ScenarioSet/) });
+    expect(guardPreview({ ...base, measures: [VAR], filters: { [SCEN]: ["HistFull"] } }, model, rules))
+      .toMatchObject({ ok: true });
+  });
+
+  it("checks the base level Apply sends: ScenarioSet as a second row field is not on that query's axis", () => {
+    expect(guardPreview({ ...base, rows: [FG, SCEN], measures: [VAR] }, model, rules)).toMatchObject({ ok: false });
+    expect(guardPreview({ ...base, rows: [SCEN, FG], measures: [VAR] }, model, rules)).toMatchObject({ ok: true });
+  });
+
+  it("never throws: a malformed level key (from a drill link or a saved view) becomes the refusal Apply would show", () => {
+    // checkQuery parses axis and filter keys when a scenario measure is present, and throws on a bad key;
+    // guardPreview runs during render, where a throw would unmount the page
+    const r = guardPreview({ ...base, rows: ["Manager"], measures: [VAR] }, model, rules);
+    expect(r).toEqual({ ok: false, error: expect.stringMatching(/bad level key: Manager/) });
+    expect(guardPreview({ ...base, measures: [VAR], filters: { "Date.x": ["d"] } }, model, rules))
+      .toMatchObject({ ok: false });
+  });
+
+  it("carries the notice Apply would show: Manager on rows with a scenario measure and no Date", () => {
+    const r = guardPreview({ ...base, rows: [MGR], measures: [VAR], filters: { [SCEN]: ["HistFull"] } }, model, rules);
+    expect(r).toMatchObject({ ok: true, notice: expect.stringMatching(/latest date 2026-06-30/) });
   });
 });

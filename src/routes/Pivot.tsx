@@ -1,15 +1,15 @@
 // Pivot workspace (docs/vite-ui-plan.md §5): the Excel-style field list, the server-driven drill
 // grid (or chart mode) and the saved-view Repository. The grid is a pure renderer — every number comes
 // from an ActivePivot query behind the browser-side guards (src/ap/pivotSource.ts).
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { useDims } from "../api/hooks";
 import { BINDINGS, DEFAULT_ROWS, checkBindings, contextFilters } from "../ap/bindings";
 import { useCubeModel } from "../ap/discovery";
 import { useGuardRules } from "../ap/guards";
-import { usePivot, type PivotConfig } from "../pivot/usePivot";
-import { FieldList } from "../pivot/FieldList";
+import { guardPreview, usePivot, type PivotConfig } from "../pivot/usePivot";
+import { FieldList, type GuardLine } from "../pivot/FieldList";
 import { PivotGrid } from "../pivot/PivotGrid";
 // Vega is ~heavy; only load it when the user switches to chart mode.
 const ChartMode = lazy(() => import("../pivot/ChartMode").then((m) => ({ default: m.ChartMode })));
@@ -47,6 +47,13 @@ export function Pivot() {
     units: "dollar",
   }, { model, rules });
   const { cfg, setCfg, reload, toggleExpand, flat, colMembers, grand, dollarMeasures, captions, warning, loading, error } = pivot;
+  // The guard check Apply would run on the edited zones, shown live in the field list. Dropped when it
+  // repeats the warning or error the page already shows (always the case right after Apply).
+  const preview = useMemo(() => guardPreview(cfg, model, rules), [cfg, model, rules]);
+  const live: GuardLine | null = !preview ? null
+    : !preview.ok ? { level: "refuse", text: preview.error }
+    : preview.notice ? { level: "notice", text: preview.notice } : null;
+  const guardLine = live && live.text !== warning && live.text !== error ? live : null;
 
   // Cross-lens drill link (?drill=<json {rows, cols?, measures, filters}>, e.g. from the
   // Attribution reconcile drawer): captured ONCE at mount, consumed inside the fold effect below
@@ -213,7 +220,7 @@ export function Pivot() {
       <QueryState q={dimsQ}>
         {() => (
           <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginTop: "0.6rem" }}>
-            <FieldList cfg={cfg} setCfg={setCfg} onApply={() => reload()} display={display} />
+            <FieldList cfg={cfg} setCfg={setCfg} onApply={() => reload()} display={display} guard={guardLine} />
             <div style={{ flex: 1, minWidth: 0 }}>
               {loading && <div className="spin">querying cube…</div>}
               {mode === "grid" ? (

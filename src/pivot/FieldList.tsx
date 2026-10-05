@@ -60,10 +60,14 @@ function groupLevels(model: CubeModel) {
   }));
 }
 
+// A guard result for the edited zones: a refusal (Apply will run nothing) or a notice (Apply will run with
+// a default or a caveat).
+export interface GuardLine { level: "refuse" | "notice"; text: string }
+
 export function FieldList({
-  cfg, setCfg, onApply, display,
+  cfg, setCfg, onApply, display, guard,
 }: { cfg: PivotConfig; setCfg: (u: (c: PivotConfig) => PivotConfig) => void; onApply: () => void;
-     display?: React.ReactNode }) {
+     display?: React.ReactNode; guard?: GuardLine | null }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const [filterDim, setFilterDim] = useState<string>("");
   const [mq, setMq] = useState("");
@@ -109,6 +113,10 @@ export function FieldList({
         <b style={{ fontSize: 13 }}>Fields</b>
         <button className="primary" onClick={onApply}>Apply</button>
       </div>
+      {guard && (
+        <div data-testid="guard-preview" className={`${guard.level === "refuse" ? "err" : "rag-amber"} small`}
+          style={{ marginBottom: "0.5rem" }}>{guard.text}</div>
+      )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <Zone title="Rows (drag to reorder = drill order)">

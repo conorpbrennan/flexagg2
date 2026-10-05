@@ -114,6 +114,15 @@ function renderPivot(withBar = false, path = "/pivot") {
 const calls = () => vi.mocked(fetchPivotLevel).mock.calls;
 const lastFilters = () => calls()[calls().length - 1][0].filters;
 const callsWithScenario = (scen: string) => calls().some(([a]) => a.filters[SCEN]?.[0] === scen);
+// The number of fetchPivotLevel calls made while fn runs. Synchronous on purpose: a control's onChange
+// calls reload(next), which calls fetchPivotLevel before its first await, and fireEvent runs inside act,
+// which also flushes any effect-driven reload. So a query a change causes is recorded by the time
+// fireEvent returns, and a 0 here needs no sleep to mean "no query".
+const queriesDuring = (fn: () => void) => {
+  const n = calls().length;
+  fn();
+  return calls().length - n;
+};
 
 describe("Pivot — loading a saved view", () => {
   it("shows the loaded view's rows on the FIRST click (not the previous view's stale rows)", async () => {
@@ -324,17 +333,12 @@ describe("Pivot — modes, panes and display options", () => {
     await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
     expect(lastFilters()[BINDINGS.units]).toEqual(["$"]);
     const sel = screen.getByDisplayValue("$") as HTMLSelectElement;
-    const before = calls().length;
-    fireEvent.change(sel, { target: { value: "%" } });
-    await waitFor(() => expect(calls().length).toBeGreaterThan(before));
+    expect(queriesDuring(() => fireEvent.change(sel, { target: { value: "%" } }))).toBe(1);
     expect(lastFilters()[BINDINGS.units]).toBeUndefined();
     expect((screen.getByDisplayValue("%") as HTMLSelectElement).value).toBe("%");
     // fraction vs % is only a format of the same numbers: no further query
-    const n = calls().length;
-    fireEvent.change(screen.getByDisplayValue("%"), { target: { value: "fraction" } });
+    expect(queriesDuring(() => fireEvent.change(screen.getByDisplayValue("%"), { target: { value: "fraction" } }))).toBe(0);
     expect((screen.getByDisplayValue("fraction") as HTMLSelectElement).value).toBe("fraction");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(calls().length).toBe(n);
   });
 
   it("the total-row checkbox re-queries; the total-column checkbox is disabled without a column field", async () => {
@@ -356,13 +360,15 @@ describe("Pivot — modes, panes and display options", () => {
     expect(dec.value).toBe("6");
     fireEvent.change(dec, { target: { value: "-3" } });
     expect(dec.value).toBe("0");
-    const n = calls().length;
-    fireEvent.click(screen.getByLabelText(/heat/));
-    fireEvent.click(screen.getByLabelText(/hide empty/));
+    expect(queriesDuring(() => {
+      fireEvent.change(dec, { target: { value: "2" } });
+      fireEvent.click(screen.getByLabelText(/heat/));
+      fireEvent.click(screen.getByLabelText(/hide empty/));
+    })).toBe(0);
     expect((screen.getByLabelText(/heat/) as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText(/hide empty/) as HTMLInputElement).checked).toBe(false);
-    await new Promise((r) => setTimeout(r, 30));
-    expect(calls().length).toBe(n);
+    // the control: a change that does query is caught the same synchronous way
+    expect(queriesDuring(() => fireEvent.click(screen.getByLabelText(/total row/)))).toBe(1);
   });
 });
 

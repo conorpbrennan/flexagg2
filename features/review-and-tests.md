@@ -25,6 +25,8 @@
 - src/components/StreamPanel.tsx
 - src/components/svg.test.tsx
 - src/components/svg.tsx
+- src/pivot/ChartMode.test.tsx
+- src/pivot/ChartMode.tsx
 - src/pivot/FieldList.test.tsx
 - src/pivot/FieldList.tsx
 - src/pivot/Repository.test.tsx
@@ -35,6 +37,11 @@
 - src/routes/Pivot.tsx
 
 ## History
+
+- 2026-10-05 `dcd3907` — fix(views_store): store schema_version per view instead of stamping it on load
+  - server/tests/test_views_api.py
+  - server/tests/test_views_store.py
+  - server/views_store.py
 
 - 2026-10-05 `cf96b41` — fix(views): saved views follow the context; missing fields stay missing; ids URL-encoded
   - src/api/views.test.ts

@@ -30,6 +30,7 @@ import { toCubeModel } from "../ap/discovery";
 import type { RawDiscovery } from "../ap/client";
 import fixture from "../ap/__fixtures__/discovery.json";
 import type { PivotQuery, Dims } from "../api/types";
+import { BINDINGS } from "../ap/bindings";
 
 const DAY = "[ScenarioDays].[Day].[Day]";
 const DAYDATE = "[ScenarioDays].[DayDate].[DayDate]";
@@ -133,5 +134,29 @@ describe("ChartMode — builder", () => {
     expect(v.getAttribute("data-y")).toBe("f1");
     expect(v.getAttribute("data-ytitle")).toBe("Scenario VaR 99");
     expect(v.getAttribute("data-keys")).toBe("f0,f1");
+  });
+});
+
+// The grid (usePivot.queryLevel) adds the Units "$" filter under cfg.units === "dollar"; the chart beside
+// it must carry the same context or it shows weight units while the grid shows dollars.
+describe("ChartMode — units context matches the grid", () => {
+  const dollar = { ...cfg, units: "dollar" as const };
+
+  it("builder query carries Units $ under dollar", async () => {
+    render(<ChartMode cfg={dollar} model={model} rules={rules} />);
+    await waitFor(() => expect(screen.getAllByTestId("vega")).toHaveLength(1));
+    expect(vi.mocked(fetchPivotLevel).mock.calls[0][0].filters[BINDINGS.units]).toEqual(["$"]);
+  });
+
+  it("builder query adds nothing under weight", async () => {
+    render(<ChartMode cfg={cfg} model={model} rules={rules} />);
+    await waitFor(() => expect(screen.getAllByTestId("vega")).toHaveLength(1));
+    expect(BINDINGS.units in vi.mocked(fetchPivotLevel).mock.calls[0][0].filters).toBe(false);
+  });
+
+  it("named saved queries carry Units $ under dollar", async () => {
+    render(<ChartMode cfg={dollar} model={model} rules={rules} savedQueries={QUERIES} savedChart={CHART} />);
+    await waitFor(() => expect(screen.getAllByTestId("vega")).toHaveLength(2));
+    for (const c of vi.mocked(fetchPivotLevel).mock.calls) expect(c[0].filters[BINDINGS.units]).toEqual(["$"]);
   });
 });

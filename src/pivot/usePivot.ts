@@ -77,13 +77,18 @@ export function mergeFilters(base: Record<string, string[]>, path: Record<string
   return f;
 }
 
+// The Units context a query runs under: dollar adds the Units "$" filter, weight adds nothing. Shared by the
+// grid (queryLevel) and chart mode so both show the same units.
+export function withUnits(filters: Record<string, string[]>, units: PivotConfig["units"]) {
+  return units === "dollar" ? { ...filters, [BINDINGS.units]: ["$"] } : filters;
+}
+
 async function queryLevel(
   cfg: PivotConfig, levelDims: string[], path: Record<string, string>, src: { model: CubeModel; rules: GuardRules },
   totals: boolean, signal?: AbortSignal,
 ): Promise<PivotResult> {
   const colDim = cfg.cols[0];
-  const filters = mergeFilters(cfg.filters, path);
-  if (cfg.units === "dollar") filters[BINDINGS.units] = ["$"]; // Units context; weight adds nothing
+  const filters = withUnits(mergeFilters(cfg.filters, path), cfg.units);
   // the Total column is the cube's per_row margin at THIS level (rows = the row dims), so it is
   // requested with the level query itself — never summed client-side (VaR is non-additive)
   return fetchPivotLevel(

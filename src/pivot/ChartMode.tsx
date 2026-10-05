@@ -12,7 +12,7 @@ import { labelKey } from "../ap/cellset";
 import type { CubeModel } from "../ap/discovery";
 import type { GuardRules } from "../ap/guards";
 import { fetchPivotLevel, makeArgs } from "../ap/pivotSource";
-import type { PivotConfig } from "./usePivot";
+import { withUnits, type PivotConfig } from "./usePivot";
 
 // A Vega-Lite spec is opaque JSON — we render saved specs verbatim, never introspect them.
 export type VegaSpec = Record<string, unknown>;
@@ -58,17 +58,17 @@ export function aliasRecords(records: Rec[], q: { rows: string[]; cols: string[]
   return { records: out, alias };
 }
 
-async function runQuery(q: PivotQuery, src: { model: CubeModel; rules: GuardRules }) {
+async function runQuery(q: PivotQuery, units: PivotConfig["units"], src: { model: CubeModel; rules: GuardRules }) {
   const rows = q.rows ?? [], cols = q.cols ?? [], measures = q.measures ?? [];
   const res = await fetchPivotLevel(
-    makeArgs(src.model, { rows, cols, measures, filters: q.filters ?? {}, totals: false, rowTot: false }),
+    makeArgs(src.model, { rows, cols, measures, filters: withUnits(q.filters ?? {}, units), totals: false, rowTot: false }),
     src.rules, BINDINGS,
   );
   return aliasRecords(res.records, { rows, cols, measures });
 }
 
 // ---- saved chart: run every query, bind records to each spec by its `source` name, render verbatim ----
-function SavedChart({ queries, specs, model, rules }: { queries: PivotQuery[]; specs: VegaSpec[] } & Src) {
+function SavedChart({ queries, specs, units, model, rules }: { queries: PivotQuery[]; specs: VegaSpec[]; units: PivotConfig["units"] } & Src) {
   const [dataByName, setDataByName] = useState<Record<string, Rec[]> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [ref, width] = useContainerWidth();
@@ -77,11 +77,11 @@ function SavedChart({ queries, specs, model, rules }: { queries: PivotQuery[]; s
     if (!model || !rules) return;   // wait for the guard rules; nothing runs unguarded
     let live = true;
     setDataByName(null); setErr(null);
-    Promise.all(queries.map(async (q) => [q.name, (await runQuery(q, { model, rules })).records] as const))
+    Promise.all(queries.map(async (q) => [q.name, (await runQuery(q, units, { model, rules })).records] as const))
       .then((pairs) => { if (live) setDataByName(Object.fromEntries(pairs)); })
       .catch((e) => { if (live) setErr((e as Error).message); });
     return () => { live = false; };
-  }, [JSON.stringify(queries), model, rules]);
+  }, [JSON.stringify(queries), units, model, rules]);
 
   return (
     <div ref={ref} style={{ width: "100%" }}>
@@ -142,11 +142,11 @@ function Builder({ cfg, model, rules }: { cfg: PivotConfig } & Src) {
     let live = true;
     setErr(null);
     runQuery({ name: "q", rows: cfg.rows.slice(0, 1), cols: [], measures: cfg.measures, filters: cfg.filters },
-      { model, rules })
+      cfg.units, { model, rules })
       .then((r) => { if (live) { setRecords(r.records); setAlias(r.alias); } })
       .catch((e) => { if (live) setErr((e as Error).message); });
     return () => { live = false; };
-  }, [cfg.rows, cfg.measures, cfg.filters, model, rules]);
+  }, [cfg.rows, cfg.measures, cfg.filters, cfg.units, model, rules]);
 
   const xKey = cfg.rows[0];
   const xTitle = model?.levels.find((l) => l.key === xKey)?.caption ?? xKey;
@@ -200,7 +200,7 @@ export function ChartMode({
   const specs = savedChart ? (Array.isArray(savedChart) ? savedChart : [savedChart]) : [];
   // a self-describing saved chart wins; otherwise fall back to the ad-hoc builder
   if (specs.length && savedQueries && savedQueries.length) {
-    return <SavedChart queries={savedQueries} specs={specs} model={model} rules={rules} />;
+    return <SavedChart queries={savedQueries} specs={specs} units={cfg.units} model={model} rules={rules} />;
   }
   return <Builder cfg={cfg} model={model} rules={rules} />;
 }

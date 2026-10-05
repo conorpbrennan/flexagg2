@@ -4,6 +4,7 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import * as hooks from "./hooks";
 import { useMeta, useDims } from "./hooks";
 
 const fetchMock = vi.fn();
@@ -24,6 +25,10 @@ function wrapper() {
 }
 
 describe("risk_api hooks", () => {
+  it("exports only the reads the explorer uses (no what-if: that lens is not in this app)", () => {
+    expect(Object.keys(hooks).sort()).toEqual(["useDims", "useMeta"]);
+  });
+
   it("useMeta reads /api/meta and never goes stale", async () => {
     const { qc, W } = wrapper();
     const { result } = renderHook(() => useMeta(), { wrapper: W });

@@ -98,6 +98,26 @@ describe("FieldList", () => {
     expect(document.body.textContent).not.toContain(SEP);
   });
 
+  it("switching the picker to another level drops the unsaved ticks of the first", async () => {
+    const SECTOR = model.levels.find((l) => l.level === "Sector")!.key;
+    vi.mocked(fetchMembers).mockImplementation(async (_m, key) =>
+      key === COUNTRY ? [{ path: "US", label: "United States" }] : [{ path: "Energy", label: "Energy" }]);
+    const setCfg = setup();
+    fireEvent.click(within(screen.getByTestId("level-Country")).getByTitle("filter"));
+    fireEvent.click(await screen.findByLabelText("United States"));
+    fireEvent.click(within(screen.getByTestId("level-Sector")).getByTitle("filter"));
+    expect(await screen.findByLabelText("Energy")).not.toBeChecked();
+    fireEvent.click(screen.getByText("done"));
+    const upd = setCfg.mock.calls[0][0] as (c: PivotConfig) => PivotConfig;
+    expect(upd(cfg0).filters[SECTOR]).toBeUndefined();
+    expect(upd(cfg0).filters).toEqual({});
+  });
+
+  it("a saved view with an empty member list for a filter does not crash the field list", () => {
+    setup({ ...cfg0, filters: { [COUNTRY]: [] } });
+    expect(screen.getByText("Fields")).toBeInTheDocument();
+  });
+
   it("a members failure is shown in the picker", async () => {
     vi.mocked(fetchMembers).mockRejectedValue(new Error("retrieval limit"));
     setup();

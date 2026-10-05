@@ -20,10 +20,16 @@
 - src/components/StreamPanel.tsx
 - src/components/svg.test.tsx
 - src/components/svg.tsx
+- src/pivot/FieldList.test.tsx
+- src/pivot/FieldList.tsx
 - src/pivot/usePivot.test.ts
 - src/pivot/usePivot.ts
 
 ## History
+
+- 2026-10-05 `6253456` — fix(usePivot): stale responses never overwrite newer ones; drill from the applied config
+  - src/pivot/usePivot.test.ts
+  - src/pivot/usePivot.ts
 
 - 2026-10-05 `e14f6da` — chore: remove UI code orphaned by the ActivePivot switch; test the risk_api hooks
   - package-lock.json

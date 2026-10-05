@@ -127,7 +127,7 @@ export function FieldList({
       <Zone title="Filters">
         {Object.entries(cfg.filters).map(([d, v]) => (
           <Chip key={d} id={d} onRemove={() => setFilter(d, [])}
-            label={`${caption(d)}=${v.length > 1 ? `${v.length}` : memberCaption(d, v[0])}`} />
+            label={v.length === 0 ? caption(d) : `${caption(d)}=${v.length > 1 ? `${v.length}` : memberCaption(d, v[0])}`} />
         ))}
       </Zone>
       {display && <Zone title="Display">{display}</Zone>}
@@ -171,7 +171,7 @@ export function FieldList({
       </div>
 
       {filterDim && model && (
-        <FilterPicker model={model} levelKey={filterDim} title={caption(filterDim)}
+        <FilterPicker key={filterDim} model={model} levelKey={filterDim} title={caption(filterDim)}
           selected={cfg.filters[filterDim] ?? []}
           onClose={() => setFilterDim("")}
           onChange={(ms) => setFilter(filterDim, ms)} />

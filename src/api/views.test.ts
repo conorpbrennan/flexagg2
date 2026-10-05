@@ -29,6 +29,13 @@ describe("views client", () => {
     ]);
   });
 
+  it("encodes each path segment but keeps the '/' separators", async () => {
+    await loadView("Public/Q1 #2/a?b%c");
+    await deleteView("Public/Q1 #2/a?b%c");
+    const want = "/views-api/views/item/Public/Q1%20%232/a%3Fb%25c";
+    expect(urls()).toEqual([want, want]);
+  });
+
   it("no URL starts /api/views", async () => {
     await listViews();
     await loadView("Public/a");

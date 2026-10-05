@@ -102,6 +102,16 @@ describe("Repository", () => {
     expect(line.textContent).toContain("[Gone].[Gone].[Gone]");
   });
 
+  it("a doc without rows/measures leaves them undefined so the current ones stay", async () => {
+    doc = { ...mk(2, { cols: [SECTOR] }), state: { cols: [SECTOR], render: "chart" } };
+    const onLoad = await open();
+    await waitFor(() => expect(onLoad).toHaveBeenCalledTimes(1));
+    const s = onLoad.mock.calls[0][0] as ViewState;
+    expect(s.rows).toBeUndefined();
+    expect(s.measures).toBeUndefined();
+    expect(s.cols).toEqual([SECTOR]);
+  });
+
   it("saves to /views-api/views/save with the current state", async () => {
     render(<Repository currentState={cur} onLoad={() => {}} />);
     await screen.findByText("v");

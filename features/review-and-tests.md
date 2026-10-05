@@ -15,6 +15,8 @@
 - src/api/stream.test.ts
 - src/api/stream.ts
 - src/api/types.ts
+- src/api/views.test.ts
+- src/api/views.ts
 - src/components/LineChart.tsx
 - src/components/Markdown.tsx
 - src/components/StreamPanel.tsx
@@ -22,10 +24,18 @@
 - src/components/svg.tsx
 - src/pivot/FieldList.test.tsx
 - src/pivot/FieldList.tsx
+- src/pivot/Repository.test.tsx
+- src/pivot/Repository.tsx
 - src/pivot/usePivot.test.ts
 - src/pivot/usePivot.ts
+- src/routes/Pivot.test.tsx
+- src/routes/Pivot.tsx
 
 ## History
+
+- 2026-10-05 `a28b4e8` — fix(FieldList): picker resets per level; an empty filter list no longer crashes
+  - src/pivot/FieldList.test.tsx
+  - src/pivot/FieldList.tsx
 
 - 2026-10-05 `6253456` — fix(usePivot): stale responses never overwrite newer ones; drill from the applied config
   - src/pivot/usePivot.test.ts

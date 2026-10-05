@@ -106,10 +106,20 @@ export function Pivot() {
     // a deferred reload() — reload closes over the CURRENT-render cfg, so a bare reload() fired
     // before React re-renders would query with the *previous* view's config (the "first click shows
     // the wrong report, second click is right" bug). Passing `next` bypasses that stale closure.
+    const rows = s.rows ?? cfg.rows, cols = s.cols ?? [];
+    // saved views carry no folded context (see currentState): take the CURRENT context for every
+    // context level the view does not filter itself, and record it as folded so it stays the context's
+    const ctx = contextFilters({ manager, date, scenario });
+    if (rows.includes(BINDINGS.scenarioSet) || cols.includes(BINDINGS.scenarioSet)) delete ctx[BINDINGS.scenarioSet];
+    const filters: Record<string, string[]> = { ...(s.filters ?? cfg.filters) };
+    for (const k of [BINDINGS.manager, BINDINGS.date, BINDINGS.scenarioSet]) {
+      if (!filters[k] && ctx[k]) filters[k] = ctx[k];
+    }
+    folded.current = ctx;
     const next: PivotConfig = {
       ...cfg,
-      rows: s.rows ?? cfg.rows, cols: s.cols ?? [], measures: s.measures ?? cfg.measures,
-      filters: s.filters ?? cfg.filters,
+      rows, cols, measures: s.measures ?? cfg.measures,
+      filters,
       // Streamlit's names: col_tot = Total ROW (the pinned grand/per_col margin), row_tot = Total
       // COLUMN (per_row margin, with a column dim). Pre-2026-08-21 Vite saves wrote the pinned
       // row as row_tot with no col_tot — read that form too.
@@ -133,10 +143,16 @@ export function Pivot() {
 
   // the saved form mirrors Streamlit's read_pivot_state() field for field, so a view written
   // here loads identically in the Streamlit app (and vice versa)
+  // Context values folded in from the context bar are NOT saved (a view would freeze the day it was
+  // saved); a filter the user chose on a context level (a different value) is.
+  const savedFilters = Object.fromEntries(Object.entries(cfg.filters).filter(([k, v]) => {
+    const f = folded.current[k];
+    return !(f && sameList(v, f));
+  }));
   const currentState: ViewState = {
     ...(loadedState ?? {}),
-    rows: cfg.rows, cols: cfg.cols, measures: cfg.measures, filters: cfg.filters,
-    slice_dims: Object.keys(cfg.filters),
+    rows: cfg.rows, cols: cfg.cols, measures: cfg.measures, filters: savedFilters,
+    slice_dims: Object.keys(savedFilters),
     row_tot: cfg.rowTot, col_tot: cfg.totals, as_pct: cfg.asPct, hide_empty: cfg.hideEmpty,
     heat: cfg.heat, prec: cfg.prec, sort: cfg.sort, units: cfg.units,
     render: mode, description: loadedView?.description,

@@ -13,12 +13,15 @@ function fitToModel(s: ViewState, model: CubeModel | null): { state: ViewState; 
   const levels = new Set(model.levels.map((l) => l.key));
   const measures = new Set(model.measures.map((m) => m.name));
   const dropped: string[] = [];
+  // an absent field stays absent: the pivot's `s.rows ?? cfg.rows` fallback keeps the current one.
+  // If a field exists but every entry is dropped it becomes [] (the view asked for those fields; the
+  // cube lacks them, and the dropped note says so) rather than silently showing the previous fields.
   const keep = (xs: string[] | undefined, ok: Set<string>) =>
-    (xs ?? []).filter((x) => ok.has(x) || (dropped.includes(x) || dropped.push(x), false));
-  const state: ViewState = {
-    ...s,
-    rows: keep(s.rows, levels), cols: keep(s.cols, levels), measures: keep(s.measures, measures),
-  };
+    xs && xs.filter((x) => ok.has(x) || (dropped.includes(x) || dropped.push(x), false));
+  const state: ViewState = { ...s };
+  // ViewState types these as required; a stored doc may still omit them, so assign through a loose view
+  const loose = state as Partial<ViewState>;
+  loose.rows = keep(s.rows, levels); loose.cols = keep(s.cols, levels); loose.measures = keep(s.measures, measures);
   if (s.filters) {
     state.filters = Object.fromEntries(Object.entries(s.filters).filter(([k]) => levels.has(k) || (dropped.includes(k) || dropped.push(k), false)));
   }

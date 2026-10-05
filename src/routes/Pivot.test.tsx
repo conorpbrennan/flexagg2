@@ -55,9 +55,11 @@ const HHI_VIEW = {
 
 const rec = (k: string, v: string) => ({ [k]: v, [`${k}#label`]: v });
 let metaHangs = false;
+let savedBody: { state: Record<string, unknown> } | null = null; // last PUT /views/save body
 
 beforeEach(() => {
   metaHangs = false;
+  savedBody = null;
   vi.mocked(fetchPivotLevel).mockReset();
   vi.mocked(fetchPivotLevel).mockImplementation(async (a) => {
     // distinct rows per requested level so we can tell which query populated the grid
@@ -68,7 +70,7 @@ beforeEach(() => {
         : [];
     return { rows: a.rows, cols: a.cols, measures: a.measures, totals: false, warning: null, records };
   });
-  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     const u = new URL(url, "http://x");
     const p = u.pathname;
     const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
@@ -76,8 +78,11 @@ beforeEach(() => {
     if (p.endsWith("/dims")) return json(DIMS);
     if (p.endsWith("/meta")) return metaHangs ? new Promise(() => {}) : json(META);
     if (p.endsWith("/views")) return json({ sections: { Public: { folders: {}, views: [
+      ...(savedBody ? [{ name: "mine", slug: "mine", path: "Public", file: "Public/mine" }] : []),
       { name: HHI_VIEW.name, slug: "concentration-hhi", path: "Public", file: "Public/concentration-hhi.json" }] },
       Private: { folders: {}, views: [] } } });
+    if (p.endsWith("/views/save")) { savedBody = JSON.parse(init!.body as string); return json({ file: "Public/mine" }); }
+    if (p.includes("/views/item/Public/mine")) return json({ ...HHI_VIEW, name: "mine", state: savedBody!.state });
     if (p.includes("/views/item/")) return json(HHI_VIEW);
     return json({});
   }) as unknown as typeof fetch);
@@ -215,5 +220,39 @@ describe("Pivot — context and guards", () => {
     await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
     expect(screen.queryByText(/Hypothetical/)).toBeNull();
     expect(screen.queryByText(/Risk-analyst commentary/)).toBeNull();
+  });
+
+  it("does not save the context-folded Manager/Date/ScenarioSet, so a loaded view follows the context bar", async () => {
+    renderPivot(true);
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Views"));
+    fireEvent.change(screen.getByPlaceholderText("view name"), { target: { value: "mine" } });
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(savedBody).not.toBeNull());
+    expect(savedBody!.state.filters).toEqual({});
+
+    // move the context bar to the older date, then load the saved view: it must use the CURRENT date
+    const selects = screen.getAllByRole("combobox") as HTMLSelectElement[];
+    fireEvent.change(selects.find((s) => s.value === "2024-12-31")!, { target: { value: "2024-11-30" } });
+    await waitFor(() => expect(lastFilters()[DATE]).toEqual(["2024-11-30"]));
+    await waitFor(() => expect(screen.getByText("mine")).toBeInTheDocument());
+    const before = calls().length;
+    fireEvent.click(screen.getByText("mine"));
+    await waitFor(() => expect(calls().length).toBeGreaterThan(before));
+    expect(lastFilters()[DATE]).toEqual(["2024-11-30"]);
+    expect(lastFilters()[MGR]).toEqual(["Soros"]);
+    expect(lastFilters()[SCEN]).toEqual(["HistFull"]);
+  });
+
+  it("still saves a filter the user chose on a context level (different from the context)", async () => {
+    renderPivot(true);
+    await waitFor(() => expect(screen.getByText("Financials")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Views"));
+    await waitFor(() => expect(screen.getByText("Concentration — Risk HHI")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Concentration — Risk HHI")); // Date=2024-11-30 vs context 2024-12-31
+    await waitFor(() => expect(screen.getByText("Date=2024-11-30")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(savedBody).not.toBeNull());
+    expect(savedBody!.state.filters).toEqual({ [DATE]: ["2024-11-30"] });
   });
 });

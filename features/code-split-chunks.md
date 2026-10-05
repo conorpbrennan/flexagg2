@@ -14,4 +14,7 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-05 `be70360` — build: split vendor chunks so vite build has no chunk-size warning
+  - src/test/viteConfig.test.ts
+  - tsconfig.node.json
+  - vite.config.ts

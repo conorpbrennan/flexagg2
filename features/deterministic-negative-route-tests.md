@@ -12,4 +12,5 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-05 `02d9066` — test(Pivot): count no-query changes synchronously instead of sleeping 30 ms
+  - src/routes/Pivot.test.tsx
